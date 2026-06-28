@@ -131,8 +131,28 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 
     const int totalIn  = getTotalNumInputChannels();
     const int totalOut = getTotalNumOutputChannels();
-    for (int ch = totalIn; ch < totalOut; ++ch)
-        buffer.clear (ch, 0, buffer.getNumSamples());
+    const int numSamples = buffer.getNumSamples();
+
+    // --- collapse input to mono ---------------------------------------------
+    // A guitar is a mono source, and it may be plugged into ANY physical input
+    // (e.g. only input 2 on the interface). Summing all input channels into
+    // channel 0 means the amp always "hears" the guitar regardless of which
+    // input it is on, and avoids the hard-panned / half-silent sound you get
+    // when a mono guitar is fed into a stereo path.
+    if (totalIn > 1)
+    {
+        auto* dst = buffer.getWritePointer (0);
+        for (int ch = 1; ch < totalIn; ++ch)
+        {
+            const auto* src = buffer.getReadPointer (ch);
+            for (int i = 0; i < numSamples; ++i)
+                dst[i] += src[i];
+        }
+    }
+
+    // Mirror the mono signal to every output channel (centred, dual-mono out).
+    for (int ch = 1; ch < totalOut; ++ch)
+        buffer.copyFrom (ch, 0, buffer, 0, 0, numSamples);
 
     engine.setParams (gatherParams());
     engine.setCabEnabled (apvts.getRawParameterValue (pid::cabOn)->load() > 0.5f);

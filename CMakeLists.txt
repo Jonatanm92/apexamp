@@ -10,6 +10,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ------------------------------------------------------------------
 option(APEXAMP_BUILD_TESTS "Build the offline DSP test harness" ON)
 
+# Enable low-latency ASIO in the Standalone app on Windows. ASIO requires the
+# Steinberg ASIO SDK, which cannot be redistributed, so this is opt-in: download
+# the SDK and configure with:
+#   cmake -B build -DAPEXAMP_ENABLE_ASIO=ON -DASIO_SDK_DIR=C:/path/to/asiosdk
+option(APEXAMP_ENABLE_ASIO "Enable ASIO support (Windows; requires ASIO_SDK_DIR)" OFF)
+set(ASIO_SDK_DIR "" CACHE PATH "Path to the Steinberg ASIO SDK root (the folder containing 'common')")
+
 # ------------------------------------------------------------------
 # JUCE (auto-downloaded via FetchContent so a fresh clone just builds)
 # ------------------------------------------------------------------
@@ -56,6 +63,22 @@ target_compile_definitions(ApexAmp PUBLIC
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
 )
+
+# ------------------------------------------------------------------
+# Optional ASIO (low-latency Windows audio in the Standalone build)
+# ------------------------------------------------------------------
+if(APEXAMP_ENABLE_ASIO)
+    if(EXISTS "${ASIO_SDK_DIR}/common/iasiodrv.h")
+        message(STATUS "ApexAmp: ASIO enabled (SDK: ${ASIO_SDK_DIR})")
+        target_compile_definitions(ApexAmp PUBLIC JUCE_ASIO=1)
+        target_include_directories(ApexAmp PRIVATE "${ASIO_SDK_DIR}/common")
+    else()
+        message(WARNING
+            "APEXAMP_ENABLE_ASIO is ON but the ASIO SDK was not found at "
+            "'${ASIO_SDK_DIR}'. Set -DASIO_SDK_DIR to the SDK root "
+            "(the folder containing 'common/iasiodrv.h'). Building without ASIO.")
+    endif()
+endif()
 
 target_link_libraries(ApexAmp PRIVATE
     juce::juce_audio_utils

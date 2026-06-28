@@ -2,20 +2,21 @@
 
 #include <juce_dsp/juce_dsp.h>
 #include "dsp/AmpCore.h"
+#include "dsp/CabSim.h"
 
 namespace apex
 {
 /**
     JUCE-side engine that wraps the pure-C++ AmpCore with the bits that need the
-    framework: oversampling around the nonlinear amp, and cabinet IR convolution.
+    framework: oversampling around the nonlinear amp, and cabinet processing.
 
     - The amp (preamp + power amp nonlinearities) runs inside an N-times oversampled
       block so aliasing from the saturation is pushed well above the audible range
       before downsampling.
-    - The cab IR convolution is linear, so it runs once at the host rate after
-      downsampling (cheaper, no aliasing concern).
-    - A synthesized default 4x12-ish cabinet IR is installed at prepare() so the
-      plugin makes a usable sound immediately, before the user loads their own WAV.
+    - Cabinet stage runs at host rate (linear, no aliasing concern):
+        * by default a smooth filter-based speaker voicing (CabSim) so the plugin
+          sounds musical immediately with no IR loaded;
+        * if the user loads a WAV/AIFF IR, partitioned convolution is used instead.
 */
 class AmpEngine
 {
@@ -35,12 +36,14 @@ public:
 
         const double osRate = sampleRate * (1 << oversampleFactorLog2);
         for (int ch = 0; ch < 2; ++ch)
+        {
             cores[ch].prepare (osRate);
+            cabSim[ch].prepare (sampleRate);
+        }
 
         juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock,
                                       (juce::uint32) channels };
         convolution.prepare (spec);
-        loadDefaultCabIR();
 
         outputGain.prepare (spec);
         outputGain.setRampDurationSeconds (0.02);
@@ -51,7 +54,7 @@ public:
     void reset()
     {
         if (oversampling) oversampling->reset();
-        for (auto& c : cores) c.reset();
+        for (int ch = 0; ch < 2; ++ch) { cores[ch].reset(); cabSim[ch].reset(); }
         convolution.reset();
     }
 
@@ -65,15 +68,18 @@ public:
 
     void setMasterGainDb (float db) { outputGain.setGainDecibels (db); }
 
-    /** Load a user IR from a WAV/AIFF file. */
+    /** Load a user IR from a WAV/AIFF file. Switches the cab to convolution mode. */
     void loadCabIRFromFile (const juce::File& file)
     {
         if (file.existsAsFile())
+        {
             convolution.loadImpulseResponse (file,
                 juce::dsp::Convolution::Stereo::yes,
                 juce::dsp::Convolution::Trim::yes,
                 0,
                 juce::dsp::Convolution::Normalise::yes);
+            usingUserIR = true;
+        }
     }
 
     void process (juce::dsp::AudioBlock<float>& block)
@@ -91,11 +97,21 @@ public:
 
         oversampling->processSamplesDown (block);
 
-        // --- linear cab IR convolution at host rate ---
+        // --- cabinet stage at host rate ---
         if (cabEnabled)
         {
-            juce::dsp::ProcessContextReplacing<float> ctx (block);
-            convolution.process (ctx);
+            if (usingUserIR)
+            {
+                juce::dsp::ProcessContextReplacing<float> ctx (block);
+                convolution.process (ctx);
+            }
+            else
+            {
+                const int chs = (int) block.getNumChannels();
+                const int n   = (int) block.getNumSamples();
+                for (int ch = 0; ch < chs; ++ch)
+                    cabSim[juce::jmin (ch, 1)].process (block.getChannelPointer ((size_t) ch), n);
+            }
         }
 
         juce::dsp::ProcessContextReplacing<float> gainCtx (block);
@@ -108,54 +124,16 @@ public:
     }
 
 private:
-    /** Build a short synthetic cabinet impulse response so there is sound on day one. */
-    void loadDefaultCabIR()
-    {
-        const int irLen = (int) (hostRate * 0.05); // 50 ms
-        juce::AudioBuffer<float> ir (1, irLen);
-        ir.clear();
-        auto* d = ir.getWritePointer (0);
-
-        // Start from a decaying noise burst...
-        juce::Random rng (1234);
-        for (int i = 0; i < irLen; ++i)
-        {
-            const float t = (float) i / (float) irLen;
-            const float decay = std::exp (-t * 18.0f);
-            d[i] = (rng.nextFloat() * 2.0f - 1.0f) * decay;
-        }
-        d[0] += 1.0f; // direct spike
-
-        // ...then voice it like a guitar cab: band-limited ~80 Hz - 5 kHz with a
-        // presence dip, by running it through a few biquads.
-        auto hp  = Biquad::makeHighpass  (hostRate, 85.0,  0.707);
-        auto lp  = Biquad::makeLowpass   (hostRate, 5000.0, 0.707);
-        auto dip = Biquad::makePeak      (hostRate, 2500.0, 1.2, -6.0);
-        auto bump= Biquad::makePeak      (hostRate, 1200.0, 0.8,  3.0);
-        for (int i = 0; i < irLen; ++i)
-        {
-            float s = d[i];
-            s = hp.processSample (s);
-            s = lp.processSample (s);
-            s = dip.processSample (s);
-            s = bump.processSample (s);
-            d[i] = s;
-        }
-
-        convolution.loadImpulseResponse (std::move (ir), hostRate,
-            juce::dsp::Convolution::Stereo::no,
-            juce::dsp::Convolution::Trim::no,
-            juce::dsp::Convolution::Normalise::yes);
-    }
-
     static constexpr int oversampleFactorLog2 = 2; // 4x
 
     double hostRate = 44100.0;
     int    maxBlock = 512;
     int    channels = 2;
     bool   cabEnabled = true;
+    bool   usingUserIR = false;
 
     AmpCore cores[2];
+    CabSim  cabSim[2];
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     juce::dsp::Convolution convolution;
     juce::dsp::Gain<float> outputGain;
