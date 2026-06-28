@@ -13,8 +13,13 @@ them with switchable amp voicings and a true power-amp feel.
 ## What's inside
 
 ```
-Input → Input HPF → Chug Enhancer → Dual-Channel Preamp → Tonestack → Low Dirt → Power Amp → Cab IR → Master
+Input → mono sum → Input HPF → Chug Enhancer → Dual-Channel Preamp → Tonestack → Low Dirt → Power Amp → Cab → Master
 ```
+
+> **Mono in, dual-mono out.** A guitar is a mono source and may be plugged into any physical
+> input on your interface (e.g. only input 2). ApexAmp sums the inputs to mono so it always
+> hears the guitar regardless of which input it's on, then sends the processed signal to both
+> output channels centred.
 
 | Module | What it does | Why it beats the reference plugins |
 |--------|--------------|------------------------------------|
@@ -23,7 +28,7 @@ Input → Input HPF → Chug Enhancer → Dual-Channel Preamp → Tonestack → 
 | **Low Dirt** | Parallel saturated low-band growl layer | Adds down-tuned growl without muddying the full-range signal |
 | **Tonestack** | Four switchable voicings: Marshall, Fender, Mesa, Modern Metal | Neither Graphene nor Thall Amp lets you swap the underlying tonestack character |
 | **Power Amp** | Bias-excursion **sag** + output-transformer saturation | The "give" and bloom under hard picking that most sims skip entirely |
-| **Cab IR** | Partitioned convolution, loads your own WAV/AIFF IRs, ships with a synthesized default cab | Use any IR you like; sounds usable out of the box |
+| **Cab** | Smooth filter-based 4x12 speaker voicing by default (steep ~5 kHz roll-off tames fizz), or load your own WAV/AIFF IR for partitioned convolution | Sounds musical out of the box; load a real IR for the final 10% |
 | **Oversampling** | 4× around the nonlinear amp stages | Keeps aliasing fizz above the audible range on high-gain tones |
 
 The nonlinear DSP core (`Source/dsp/`) is **pure C++ with no JUCE dependency**, so it can be
@@ -57,6 +62,22 @@ automatically. Restart your DAW and rescan if it doesn't appear.
 - **Windows**: VST3 + Standalone. Use the Visual Studio generator or Ninja.
 - **Linux**: VST3 + Standalone. Install dev packages first:
   `libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev libfreetype6-dev`
+
+### Low-latency ASIO (Windows Standalone)
+
+ASIO gives the lowest round-trip latency for live playing. The Steinberg ASIO SDK can't be
+redistributed, so it's opt-in:
+
+1. Download the **ASIO SDK** from Steinberg and unzip it (you'll get a folder containing `common/`).
+2. Configure with the SDK path:
+   ```
+   cmake -B build -DCMAKE_BUILD_TYPE=Release -DAPEXAMP_ENABLE_ASIO=ON -DASIO_SDK_DIR=C:/path/to/asiosdk
+   cmake --build build --config Release --parallel
+   ```
+The Standalone app's audio settings will then offer your ASIO device.
+
+> Tip: if you run ApexAmp **inside a DAW** (Reaper, etc.), the DAW already provides ASIO and
+> input routing, so you don't need this — it only matters for the Standalone app.
 
 ---
 
@@ -115,7 +136,7 @@ CMakeLists.txt          # JUCE via FetchContent, builds plugin + offline test
 Source/
   PluginProcessor.*     # AudioProcessor + APVTS parameter layout
   PluginEditor.*        # UI
-  AmpEngine.h           # JUCE oversampling + cab IR convolution wrapper
+  AmpEngine.h           # JUCE oversampling + cab (filter cab / IR convolution) wrapper
   dsp/                  # pure-C++ DSP core (no JUCE)
     Biquad.h            # RBJ biquads, DC blocker, envelope follower
     TubeStage.h         # asymmetric triode stage
@@ -123,6 +144,7 @@ Source/
     Tonestack.h         # 4 amp voicings
     ChugEnhancer.h      # transient enhancer + Low Dirt
     PowerAmp.h          # sag + transformer saturation
+    CabSim.h            # filter-based speaker/cab voicing (default)
     AmpCore.h           # full chain
 tests/
   offline_test.cpp      # DAW-free DSP harness
