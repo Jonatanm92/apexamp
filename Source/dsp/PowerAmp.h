@@ -22,7 +22,7 @@ public:
     {
         fs = sampleRate;
         sagEnv.prepare (fs);
-        sagEnv.setTimes (28.0f, 300.0f);  // slow attack lets the pick transient punch through first
+        sagEnv.setTimes (8.0f, 350.0f);  // slow, musical "breathing"
         hpf      = Biquad::makeHighpass  (fs, 60.0,   0.707); // keep the power stage tight
         presence = Biquad::makeHighShelf (fs, 3000.0, 0.7, 2.5); // grind before the transformer
         coreLoss = Biquad::makeLowpass   (fs, 12000.0, 0.707);   // gentle, not dark

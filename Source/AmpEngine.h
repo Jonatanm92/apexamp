@@ -3,7 +3,6 @@
 #include <juce_dsp/juce_dsp.h>
 #include "dsp/AmpCore.h"
 #include "dsp/CabSim.h"
-#include "dsp/OutputStage.h"
 
 namespace apex
 {
@@ -40,8 +39,6 @@ public:
         {
             cores[ch].prepare (osRate);
             cabSim[ch].prepare (sampleRate);
-            outStage[ch].prepare (sampleRate);
-            outStage[ch].setParams (0.6f, 6.0f); // punchy + loud by default
         }
 
         juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock,
@@ -57,7 +54,7 @@ public:
     void reset()
     {
         if (oversampling) oversampling->reset();
-        for (int ch = 0; ch < 2; ++ch) { cores[ch].reset(); cabSim[ch].reset(); outStage[ch].reset(); }
+        for (int ch = 0; ch < 2; ++ch) { cores[ch].reset(); cabSim[ch].reset(); }
         convolution.reset();
     }
 
@@ -117,14 +114,6 @@ public:
             }
         }
 
-        // --- output stage: transient punch + maximiser (loud, dense, in-your-face) ---
-        {
-            const int chs = (int) block.getNumChannels();
-            const int n   = (int) block.getNumSamples();
-            for (int ch = 0; ch < chs; ++ch)
-                outStage[juce::jmin (ch, 1)].process (block.getChannelPointer ((size_t) ch), n);
-        }
-
         juce::dsp::ProcessContextReplacing<float> gainCtx (block);
         outputGain.process (gainCtx);
     }
@@ -145,7 +134,6 @@ private:
 
     AmpCore cores[2];
     CabSim  cabSim[2];
-    OutputStage outStage[2];
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     juce::dsp::Convolution convolution;
     juce::dsp::Gain<float> outputGain;

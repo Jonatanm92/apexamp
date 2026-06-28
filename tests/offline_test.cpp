@@ -10,7 +10,6 @@
 // Run:    ./build/apexamp_offline_test
 
 #include "dsp/AmpCore.h"
-#include "dsp/OutputStage.h"
 
 #include <cstdio>
 #include <cstdint>
@@ -123,13 +122,8 @@ void runPreset (const char* name, const apex::AmpParams& p, const std::vector<fl
     core.prepare (kSampleRate);
     core.setParams (p);
 
-    apex::OutputStage out;
-    out.prepare (kSampleRate);
-    out.setParams (0.6f, 6.0f); // match the engine's default punch + maximiser
-
     std::vector<float> wet = dry;
     core.process (wet.data(), (int) wet.size());
-    out.process (wet.data(), (int) wet.size());
 
     const Stats st = analyse (wet);
     const float lowDb  = bandRmsDb (wet, kSampleRate, true,  200.0);
