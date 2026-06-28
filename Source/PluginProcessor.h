@@ -3,6 +3,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "AmpEngine.h"
+#include "dsp/PitchDetector.h"
+#include <atomic>
 
 class ApexAmpProcessor : public juce::AudioProcessor
 {
@@ -61,6 +63,9 @@ public:
     juce::File getCabIRFile() const { return engine.getCabIRFile(); }
     juce::File getCabIRFileB() const { return engine.getCabIRFileB(); }
 
+    /** Latest detected pitch in Hz for the tuner (0 = none). */
+    float getTunerFrequency() const { return tunerFreq.load(); }
+
     /** Save/load a full preset (parameters + IR path) to a .apreset file. */
     void savePresetToFile (const juce::File& file)
     {
@@ -81,6 +86,8 @@ private:
     apex::AmpParams gatherParams();
 
     apex::AmpEngine engine;
+    apex::PitchDetector pitchDetector;
+    std::atomic<float> tunerFreq { 0.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ApexAmpProcessor)
 };

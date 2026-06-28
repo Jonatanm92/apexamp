@@ -61,6 +61,9 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
             });
     };
 
+    tuner.getFreq = [this] { return proc.getTunerFrequency(); };
+    addAndMakeVisible (tuner);
+
     // --- selectors ---
     channelBox.addItemList ({ "Tight", "Scoop" }, 1);
     addAndMakeVisible (channelBox);
@@ -219,11 +222,12 @@ void ApexAmpEditor::paint (juce::Graphics& g)
 
 void ApexAmpEditor::resized()
 {
-    // Preset bar lives in the title band (top-right), so the knob layout below
+    // Preset bar + tuner live in the title band (top), so the knob layout below
     // is unaffected.
-    presetBox.setBounds        (300, 12, 246, 26);
-    savePresetButton.setBounds (552, 12, 88, 26);
-    loadPresetButton.setBounds (646, 12, 88, 26);
+    presetBox.setBounds        (214, 12, 196, 26);
+    savePresetButton.setBounds (414, 12, 60, 26);
+    loadPresetButton.setBounds (478, 12, 60, 26);
+    tuner.setBounds            (596, 6, 252, 34);
 
     auto area = getLocalBounds().reduced (12);
     area.removeFromTop (40); // title

@@ -136,6 +136,7 @@ apex::AmpParams ApexAmpProcessor::gatherParams()
 void ApexAmpProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels());
+    pitchDetector.prepare (sampleRate, samplesPerBlock);
     setLatencySamples (engine.getLatencySamples());
 }
 
@@ -176,6 +177,14 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     for (int ch = 1; ch < totalOut; ++ch)
         buffer.copyFrom (ch, 0, buffer, 0, 0, numSamples);
 
+    // Feed the tuner from the dry mono DI (before the amp processes it).
+    if (buffer.getNumChannels() > 0)
+    {
+        const float* di = buffer.getReadPointer (0);
+        for (int i = 0; i < numSamples; ++i)
+            pitchDetector.pushSample (di[i]);
+    }
+
     engine.setParams (gatherParams());
     engine.setCabEnabled (apvts.getRawParameterValue (pid::cabOn)->load() > 0.5f);
     engine.setCabType ((apex::CabType) (int) apvts.getRawParameterValue (pid::cabType)->load());
@@ -186,6 +195,8 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 
     juce::dsp::AudioBlock<float> block (buffer);
     engine.process (block);
+
+    tunerFreq.store (pitchDetector.getFrequency());
 }
 
 juce::AudioProcessorEditor* ApexAmpProcessor::createEditor()
