@@ -23,6 +23,7 @@ namespace
 {
 constexpr double kSampleRate = 192000.0; // emulate the oversampled rate AmpCore runs at
 constexpr double kDurationS  = 2.0;
+constexpr double kPi         = 3.14159265358979323846; // portable (MSVC has no M_PI)
 
 // ---- minimal 16-bit mono WAV writer ---------------------------------------
 void writeWav (const std::string& path, const std::vector<float>& samples, double fs)
@@ -66,10 +67,10 @@ std::vector<float> makeTestSignal (double fs, double seconds)
         const double tt = std::fmod (t, 1.0);
         const double env = std::exp (-tt * 4.0) * (1.0 - std::exp (-tt * 800.0));
         double s = 0.0;
-        s += 1.0  * std::sin (2.0 * M_PI * f0 * 1 * t);
-        s += 0.5  * std::sin (2.0 * M_PI * f0 * 2 * t);
-        s += 0.33 * std::sin (2.0 * M_PI * f0 * 3 * t);
-        s += 0.25 * std::sin (2.0 * M_PI * f0 * 4 * t);
+        s += 1.0  * std::sin (2.0 * kPi * f0 * 1 * t);
+        s += 0.5  * std::sin (2.0 * kPi * f0 * 2 * t);
+        s += 0.33 * std::sin (2.0 * kPi * f0 * 3 * t);
+        s += 0.25 * std::sin (2.0 * kPi * f0 * 4 * t);
         out[(size_t) i] = (float) (0.4 * env * s);
     }
     return out;
