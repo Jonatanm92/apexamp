@@ -51,8 +51,8 @@ private:
     juce::ComboBox presetBox;
     juce::TextButton savePresetButton { "Save" }, loadPresetButton { "Load" };
 
-    juce::ComboBox channelBox, tonestackBox;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> channelAtt, tonestackAtt;
+    juce::ComboBox channelBox, tonestackBox, cabTypeBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> channelAtt, tonestackAtt, cabTypeAtt;
 
     juce::ToggleButton cabButton { "Cab" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> cabAtt;

@@ -72,6 +72,12 @@ public:
 
     void setCabEnabled (bool shouldBeEnabled) noexcept { cabEnabled = shouldBeEnabled; }
 
+    void setCabType (CabType t) noexcept
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            cabSim[ch].setType (t);
+    }
+
     void setMasterGainDb (float db) { outputGain.setGainDecibels (db); }
 
     /** Load a user IR from a WAV/AIFF file. Switches the cab to convolution mode. */

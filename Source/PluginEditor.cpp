@@ -70,6 +70,11 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     tonestackAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
         apvts, "tonestack", tonestackBox);
 
+    cabTypeBox.addItemList ({ "Modern V30", "Vintage Greenback", "Tight 4x12", "American Scooped" }, 1);
+    addAndMakeVisible (cabTypeBox);
+    cabTypeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
+        apvts, "cabType", cabTypeBox);
+
     addAndMakeVisible (cabButton);
     cabAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
         apvts, "cabOn", cabButton);
@@ -188,16 +193,14 @@ void ApexAmpEditor::resized()
 
     // top selector row
     auto top = area.removeFromTop (60);
-    channelBox.setBounds   (top.removeFromLeft (120).withSizeKeepingCentre (120, 26));
-    top.removeFromLeft (8);
-    tonestackBox.setBounds (top.removeFromLeft (140).withSizeKeepingCentre (140, 26));
-    top.removeFromLeft (12);
-    cabButton.setBounds    (top.removeFromLeft (56).withSizeKeepingCentre (56, 26));
-    loadIRButton.setBounds (top.removeFromLeft (90).withSizeKeepingCentre (90, 26));
-    top.removeFromLeft (6);
-    clearIRButton.setBounds (top.removeFromLeft (78).withSizeKeepingCentre (78, 26));
-    top.removeFromLeft (8);
-    irLabel.setBounds (top.withSizeKeepingCentre (top.getWidth(), 26));
+    auto row = top.withSizeKeepingCentre (top.getWidth(), 26);
+    channelBox.setBounds   (row.removeFromLeft (104)); row.removeFromLeft (6);
+    tonestackBox.setBounds (row.removeFromLeft (124)); row.removeFromLeft (6);
+    cabTypeBox.setBounds   (row.removeFromLeft (148)); row.removeFromLeft (6);
+    cabButton.setBounds    (row.removeFromLeft (48));   row.removeFromLeft (4);
+    loadIRButton.setBounds (row.removeFromLeft (78));   row.removeFromLeft (4);
+    clearIRButton.setBounds (row.removeFromLeft (68));  row.removeFromLeft (6);
+    irLabel.setBounds (row);
 
     const int kw = 92, kh = 100;
     auto place = [kw, kh] (Knob* k, int x, int y) { k->setBounds (x, y, kw, kh); };

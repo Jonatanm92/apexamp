@@ -21,6 +21,7 @@ namespace pid
     constexpr auto powerDrive = "powerDrive";
     constexpr auto gate       = "gate";
     constexpr auto cabOn      = "cabOn";
+    constexpr auto cabType    = "cabType";
     constexpr auto master     = "master";
 }
 
@@ -78,6 +79,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
         NormalisableRange<float> (-80.0f, -20.0f, 0.5f), -60.0f));
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::cabOn, 1 }, "Cab", true));
+
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { pid::cabType, 1 }, "Cab Type",
+        StringArray { "Modern V30", "Vintage Greenback", "Tight 4x12", "American Scooped" }, 0));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { pid::master, 1 }, "Master",
@@ -162,6 +167,7 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 
     engine.setParams (gatherParams());
     engine.setCabEnabled (apvts.getRawParameterValue (pid::cabOn)->load() > 0.5f);
+    engine.setCabType ((apex::CabType) (int) apvts.getRawParameterValue (pid::cabType)->load());
     engine.setMasterGainDb (apvts.getRawParameterValue (pid::master)->load());
 
     juce::dsp::AudioBlock<float> block (buffer);
