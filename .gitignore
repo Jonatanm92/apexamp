@@ -1,0 +1,17 @@
+# Build output
+build/
+build_*/
+cmake-build-*/
+out_*.wav
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+*.user
+
+# JUCE / plugin artefacts
+*.vst3/
+*.component/
+*.o
+*.a
