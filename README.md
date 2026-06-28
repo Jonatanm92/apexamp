@@ -138,11 +138,13 @@ Use the built-in preset menu, or dial these by hand:
 - [x] Built-in cab voicing library + user IR loading
 - [x] Noise gate
 - [x] 8x oversampling, ASIO (Windows)
-- [ ] IR mic blending / morphing, dual-IR
+- [x] Punch + Loud output stage (alias-free transient gain + limiter)
+- [x] Custom dark/amber UI (LookAndFeel)
+- [x] Dual-IR + mic blend
+- [x] Built-in tuner
 - [ ] Per-channel independent knob sets
 - [ ] Neural capture mode (RTNeural) for user amp captures
-- [ ] Resizable / skinned UI with custom LookAndFeel
-- [ ] Tuner utility
+- [ ] Resizable UI
 
 ## Project layout
 
