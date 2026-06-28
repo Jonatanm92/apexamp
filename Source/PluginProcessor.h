@@ -42,15 +42,24 @@ public:
         apvts.state.setProperty ("irPath", file.getFullPathName(), nullptr);
     }
 
+    /** Load the second (blend) IR. */
+    void loadCabIRB (const juce::File& file)
+    {
+        engine.loadCabIRBFromFile (file);
+        apvts.state.setProperty ("irPathB", file.getFullPathName(), nullptr);
+    }
+
     /** Revert to the built-in filter cab. */
     void clearCabIR()
     {
         engine.clearCabIR();
         apvts.state.setProperty ("irPath", "", nullptr);
+        apvts.state.setProperty ("irPathB", "", nullptr);
     }
 
-    /** Currently loaded IR file (or an empty File if using the built-in cab). */
+    /** Currently loaded IR files (empty File if none). */
     juce::File getCabIRFile() const { return engine.getCabIRFile(); }
+    juce::File getCabIRFileB() const { return engine.getCabIRFileB(); }
 
     /** Save/load a full preset (parameters + IR path) to a .apreset file. */
     void savePresetToFile (const juce::File& file)

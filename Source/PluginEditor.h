@@ -58,13 +58,14 @@ private:
 
     juce::ToggleButton cabButton { "Cab" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> cabAtt;
-    juce::TextButton loadIRButton { "Load IR..." };
+    juce::TextButton loadIRButton { "IR A..." };
+    juce::TextButton loadIRBButton { "IR B..." };
     juce::TextButton clearIRButton { "Built-in" };
     juce::Label      irLabel;
 
     // Knobs
     std::unique_ptr<Knob> kInput, kGain, kPush, kTight, kSuperCut, kBias,
-                          kBass, kMid, kTreble, kChug, kLowDrv, kLowMix,
+                          kBass, kMid, kTreble, kChug, kLowDrv, kLowMix, kBlend,
                           kSag, kPower, kGate, kPunch, kLoud, kMaster;
 
     std::unique_ptr<juce::FileChooser> chooser;

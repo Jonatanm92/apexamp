@@ -22,6 +22,7 @@ namespace pid
     constexpr auto gate       = "gate";
     constexpr auto cabOn      = "cabOn";
     constexpr auto cabType    = "cabType";
+    constexpr auto cabBlend   = "cabBlend";
     constexpr auto outPunch   = "outPunch";
     constexpr auto outLoud    = "outLoud";
     constexpr auto master     = "master";
@@ -85,6 +86,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { pid::cabType, 1 }, "Cab Type",
         StringArray { "Modern V30", "Vintage Greenback", "Tight 4x12", "American Scooped" }, 0));
+
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::cabBlend, 1 }, "IR Blend",
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
 
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::outPunch, 1 }, "Punch",
         NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.3f));
@@ -175,6 +179,7 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     engine.setParams (gatherParams());
     engine.setCabEnabled (apvts.getRawParameterValue (pid::cabOn)->load() > 0.5f);
     engine.setCabType ((apex::CabType) (int) apvts.getRawParameterValue (pid::cabType)->load());
+    engine.setCabBlend (apvts.getRawParameterValue (pid::cabBlend)->load());
     engine.setOutputParams (apvts.getRawParameterValue (pid::outPunch)->load(),
                             apvts.getRawParameterValue (pid::outLoud)->load());
     engine.setMasterGainDb (apvts.getRawParameterValue (pid::master)->load());
@@ -204,13 +209,20 @@ void ApexAmpProcessor::setStateInformation (const void* data, int sizeInBytes)
     {
         apvts.replaceState (tree);
 
-        // Restore a previously loaded cab IR, if any.
+        // Restore previously loaded cab IRs, if any.
         const auto path = apvts.state.getProperty ("irPath", "").toString();
         if (path.isNotEmpty())
         {
             const juce::File f (path);
             if (f.existsAsFile())
                 engine.loadCabIRFromFile (f);
+        }
+        const auto pathB = apvts.state.getProperty ("irPathB", "").toString();
+        if (pathB.isNotEmpty())
+        {
+            const juce::File f (pathB);
+            if (f.existsAsFile())
+                engine.loadCabIRBFromFile (f);
         }
     }
 }

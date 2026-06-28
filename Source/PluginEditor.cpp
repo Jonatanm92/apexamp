@@ -99,6 +99,24 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
             });
     };
 
+    addAndMakeVisible (loadIRBButton);
+    loadIRBButton.onClick = [this]
+    {
+        chooser = std::make_unique<juce::FileChooser> (
+            "Select a second IR to blend", juce::File{}, "*.wav;*.aiff;*.aif");
+        chooser->launchAsync (juce::FileBrowserComponent::openMode
+                              | juce::FileBrowserComponent::canSelectFiles,
+            [this] (const juce::FileChooser& fc)
+            {
+                const auto file = fc.getResult();
+                if (file.existsAsFile())
+                {
+                    proc.loadCabIRB (file);
+                    updateIRLabel();
+                }
+            });
+    };
+
     addAndMakeVisible (clearIRButton);
     clearIRButton.onClick = [this]
     {
@@ -128,6 +146,7 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     mk (kChug,     "chug",         "Chug");
     mk (kLowDrv,   "lowDirtDrive", "Low Drv");
     mk (kLowMix,   "lowDirtMix",   "Low Mix");
+    mk (kBlend,    "cabBlend",     "IR Blend");
     mk (kSag,      "sag",          "Sag");
     mk (kPower,    "powerDrive",   "Power");
     mk (kGate,     "gate",         "Gate");
@@ -137,8 +156,8 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
 
     for (auto* k : { kInput.get(), kGain.get(), kPush.get(), kTight.get(), kSuperCut.get(),
                      kBias.get(), kBass.get(), kMid.get(), kTreble.get(), kChug.get(),
-                     kLowDrv.get(), kLowMix.get(), kSag.get(), kPower.get(), kGate.get(),
-                     kPunch.get(), kLoud.get(), kMaster.get() })
+                     kLowDrv.get(), kLowMix.get(), kBlend.get(), kSag.get(), kPower.get(),
+                     kGate.get(), kPunch.get(), kLoud.get(), kMaster.get() })
         addAndMakeVisible (k);
 
     updateIRLabel();
@@ -147,9 +166,18 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
 
 void ApexAmpEditor::updateIRLabel()
 {
-    const auto f = proc.getCabIRFile();
-    irLabel.setText (f.existsAsFile() ? ("IR: " + f.getFileName()) : "Built-in cab",
-                     juce::dontSendNotification);
+    const auto a = proc.getCabIRFile();
+    const auto b = proc.getCabIRFileB();
+    juce::String t;
+    if (! a.existsAsFile())
+        t = "Built-in cab";
+    else
+    {
+        t = "A: " + a.getFileName();
+        if (b.existsAsFile())
+            t += "   B: " + b.getFileName();
+    }
+    irLabel.setText (t, juce::dontSendNotification);
 }
 
 ApexAmpEditor::~ApexAmpEditor()
@@ -203,12 +231,13 @@ void ApexAmpEditor::resized()
     // top selector row
     auto top = area.removeFromTop (60);
     auto row = top.withSizeKeepingCentre (top.getWidth(), 26);
-    channelBox.setBounds   (row.removeFromLeft (104)); row.removeFromLeft (6);
-    tonestackBox.setBounds (row.removeFromLeft (124)); row.removeFromLeft (6);
-    cabTypeBox.setBounds   (row.removeFromLeft (148)); row.removeFromLeft (6);
-    cabButton.setBounds    (row.removeFromLeft (48));   row.removeFromLeft (4);
-    loadIRButton.setBounds (row.removeFromLeft (78));   row.removeFromLeft (4);
-    clearIRButton.setBounds (row.removeFromLeft (68));  row.removeFromLeft (6);
+    channelBox.setBounds   (row.removeFromLeft (96));  row.removeFromLeft (5);
+    tonestackBox.setBounds (row.removeFromLeft (118)); row.removeFromLeft (5);
+    cabTypeBox.setBounds   (row.removeFromLeft (140)); row.removeFromLeft (5);
+    cabButton.setBounds    (row.removeFromLeft (44));  row.removeFromLeft (4);
+    loadIRButton.setBounds (row.removeFromLeft (60));  row.removeFromLeft (4);
+    loadIRBButton.setBounds (row.removeFromLeft (60)); row.removeFromLeft (4);
+    clearIRButton.setBounds (row.removeFromLeft (66)); row.removeFromLeft (6);
     irLabel.setBounds (row);
 
     const int kw = 92, kh = 100;
@@ -227,6 +256,7 @@ void ApexAmpEditor::resized()
     place (kChug.get(),     500, y1);
     place (kLowDrv.get(),   500 + 64,  y1);
     place (kLowMix.get(),   500 + 128, y1);
+    place (kBlend.get(),    500 + 196, y1);
 
     // Row 2 - voicing detail + power/output
     int y2 = 280;
