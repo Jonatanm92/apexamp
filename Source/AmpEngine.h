@@ -124,7 +124,7 @@ public:
     }
 
 private:
-    static constexpr int oversampleFactorLog2 = 2; // 4x
+    static constexpr int oversampleFactorLog2 = 3; // 8x — more headroom for high-gain, less aliasing
 
     double hostRate = 44100.0;
     int    maxBlock = 512;
