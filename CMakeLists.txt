@@ -70,6 +70,7 @@ target_link_libraries(ApexAmp PRIVATE
 # Offline DSP test harness (pure C++, no JUCE, no audio device needed)
 # ------------------------------------------------------------------
 if(APEXAMP_BUILD_TESTS)
+    enable_testing()
     add_executable(apexamp_offline_test
         tests/offline_test.cpp
     )
@@ -77,4 +78,6 @@ if(APEXAMP_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/Source
     )
     target_compile_features(apexamp_offline_test PRIVATE cxx_std_17)
+
+    add_test(NAME offline_dsp_test COMMAND apexamp_offline_test)
 endif()
