@@ -43,7 +43,26 @@ jobs:
             libglu1-mesa-dev mesa-common-dev \
             libcurl4-openssl-dev
 
+      # Download the official Steinberg ASIO SDK so the Windows Standalone can be
+      # built with low-latency ASIO support. The SDK is only used to compile
+      # against (not redistributed); the resulting binary may be distributed.
+      - name: Download ASIO SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://download.steinberg.net/sdk_downloads/asiosdk_2.3.3_2019-06-14.zip" -OutFile asiosdk.zip
+          Expand-Archive -Path asiosdk.zip -DestinationPath asiosdk -Force
+
+      - name: Configure CMake (Windows, with ASIO)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DAPEXAMP_ENABLE_ASIO=ON
+          "-DASIO_SDK_DIR=${{ github.workspace }}/asiosdk/asiosdk_2.3.3_2019-06-14"
+
       - name: Configure CMake
+        if: runner.os != 'Windows'
         run: cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 
       - name: Build
