@@ -98,16 +98,28 @@ listen, repeat.
 
 ## Controls
 
+**Presets:** factory preset menu (Chug Machine, Djent Tight, Modern Lead, Tight Rhythm, Clean…) plus **Save/Load** for your own `.apreset` files (parameters *and* the loaded IR path are saved).
 **Preamp:** Channel (Tight/Scoop) · Input · Gain · Push · Tight · Super Cut · Bias
-**Tone:** Tonestack model · Bass · Mid · Treble
-**Dynamics:** Chug · Low Dirt Drive · Low Dirt Mix
-**Power / Output:** Sag · Power Drive · Cab on/off · Load IR · Master
+**Tone:** Tonestack model (Marshall/Fender/Mesa/Modern Metal) · Bass · Mid · Treble
+**Dynamics:** Chug · Low Dirt Drive · Low Dirt Mix · **Gate** (input noise gate threshold)
+**Cab:** Cab on/off · **Cab Type** (Modern V30 / Vintage Greenback / Tight 4x12 / American Scooped) · **Load IR** (any WAV/AIFF; the name is shown and it persists with your project) · **Built-in** (revert to the filter cab)
+**Power / Output:** Sag · Power Drive · Master
+
+### Noise gate
+High-gain amps amplify the noise floor between notes. The **Gate** gates the DI *before* the
+preamp, so hiss/hum never gets amplified — giving tight, silent chugs. Turn it up (toward -20 dB)
+for more aggressive gating; down toward -80 dB to disable.
+
+### Cabinet
+Use the built-in **Cab Type** voicings for an instant usable sound, or **Load IR** to use any
+impulse response (a real IR is the single biggest tone upgrade). Loading an IR bypasses the
+built-in voicing; **Built-in** switches back.
 
 ---
 
 ## Starting-point presets (to A/B against the references)
 
-These are good launch points — tweak to taste.
+Use the built-in preset menu, or dial these by hand:
 
 ### "Tight Crunch" — Marshall-style rhythm
 `Channel=Tight · Tonestack=Marshall · Gain≈0.6 · Tight≈0.4 · Bass≈0.55 · Mid≈0.6 · Treble≈0.55 · Chug≈0.3 · Sag≈0.3 · Power≈0.4`
@@ -122,12 +134,15 @@ These are good launch points — tweak to taste.
 
 ## Roadmap
 
-- [ ] Preset manager (save/recall, factory bank)
-- [ ] IR loader UI with built-in cab library + mic blending / morphing
+- [x] Preset manager (save/recall, factory bank)
+- [x] Built-in cab voicing library + user IR loading
+- [x] Noise gate
+- [x] 8x oversampling, ASIO (Windows)
+- [ ] IR mic blending / morphing, dual-IR
 - [ ] Per-channel independent knob sets
 - [ ] Neural capture mode (RTNeural) for user amp captures
 - [ ] Resizable / skinned UI with custom LookAndFeel
-- [ ] Noise gate and tuner utilities
+- [ ] Tuner utility
 
 ## Project layout
 
@@ -136,15 +151,17 @@ CMakeLists.txt          # JUCE via FetchContent, builds plugin + offline test
 Source/
   PluginProcessor.*     # AudioProcessor + APVTS parameter layout
   PluginEditor.*        # UI
+  Presets.h             # factory presets + apply logic
   AmpEngine.h           # JUCE oversampling + cab (filter cab / IR convolution) wrapper
   dsp/                  # pure-C++ DSP core (no JUCE)
     Biquad.h            # RBJ biquads, DC blocker, envelope follower
+    NoiseGate.h         # input noise gate
     TubeStage.h         # asymmetric triode stage
     DualChannelPreamp.h # Tight / Scoop cascaded preamp
     Tonestack.h         # 4 amp voicings
     ChugEnhancer.h      # transient enhancer + Low Dirt
     PowerAmp.h          # sag + transformer saturation
-    CabSim.h            # filter-based speaker/cab voicing (default)
+    CabSim.h            # filter-based speaker/cab voicings (selectable)
     AmpCore.h           # full chain
 tests/
   offline_test.cpp      # DAW-free DSP harness
