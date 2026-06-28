@@ -34,7 +34,7 @@ public:
     void reset() noexcept
     {
         hp.reset(); thump.reset(); scoop.reset();
-        presence.reset(); lp1.reset(); lp2.reset();
+        presence.reset(); edge.reset(); lp1.reset(); lp2.reset();
     }
 
     inline float processSample (float x) noexcept
@@ -43,6 +43,7 @@ public:
         x = thump.processSample (x);
         x = scoop.processSample (x);
         x = presence.processSample (x);
+        x = edge.processSample (x);
         x = lp1.processSample (x);
         x = lp2.processSample (x);
         return x;
@@ -57,15 +58,16 @@ public:
 private:
     void build() noexcept
     {
-        hp       = Biquad::makeHighpass (fs, 80.0,   0.707);
-        thump    = Biquad::makePeak     (fs, 110.0,  1.1,  3.5);
-        scoop    = Biquad::makePeak     (fs, 450.0,  1.0, -3.0);
-        presence = Biquad::makePeak     (fs, 2800.0, 1.3,  4.0);
-        lp1      = Biquad::makeLowpass  (fs, 5000.0, 0.707);
-        lp2      = Biquad::makeLowpass  (fs, 5200.0, 0.707); // cascade => steeper roll-off
+        hp       = Biquad::makeHighpass  (fs, 85.0,   0.8);
+        thump    = Biquad::makePeak      (fs, 100.0,  1.0,  1.0);  // a little chunk, not boom
+        scoop    = Biquad::makePeak      (fs, 450.0,  1.0, -2.5);  // clear the boxy mud
+        presence = Biquad::makePeak      (fs, 3500.0, 1.2,  5.0);  // bite / cut
+        edge     = Biquad::makeHighShelf (fs, 4500.0, 0.7,  3.0);  // the "gnarl" zone
+        lp1      = Biquad::makeLowpass   (fs, 6500.0, 0.707);      // speaker roll-off,
+        lp2      = Biquad::makeLowpass   (fs, 6800.0, 0.707);      // but high enough to keep grain
     }
 
     double fs = 44100.0;
-    Biquad hp, thump, scoop, presence, lp1, lp2;
+    Biquad hp, thump, scoop, presence, edge, lp1, lp2;
 };
 } // namespace apex

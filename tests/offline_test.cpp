@@ -66,12 +66,17 @@ std::vector<float> makeTestSignal (double fs, double seconds)
         // pluck envelope: fast attack, exponential decay, re-pluck at 1.0s
         const double tt = std::fmod (t, 1.0);
         const double env = std::exp (-tt * 4.0) * (1.0 - std::exp (-tt * 800.0));
+
+        // Richer harmonic series (1/n roll-off) so there is real high-frequency
+        // content to measure, like an actual guitar DI rather than a sine.
         double s = 0.0;
-        s += 1.0  * std::sin (2.0 * kPi * f0 * 1 * t);
-        s += 0.5  * std::sin (2.0 * kPi * f0 * 2 * t);
-        s += 0.33 * std::sin (2.0 * kPi * f0 * 3 * t);
-        s += 0.25 * std::sin (2.0 * kPi * f0 * 4 * t);
-        out[(size_t) i] = (float) (0.4 * env * s);
+        for (int h = 1; h <= 12; ++h)
+            s += (1.0 / h) * std::sin (2.0 * kPi * f0 * h * t);
+
+        // Short pick-attack transient (broadband click) at the start of each note.
+        const double click = std::exp (-tt * 600.0) * std::sin (2.0 * kPi * 3500.0 * t);
+
+        out[(size_t) i] = (float) (0.35 * env * (s + 0.5 * click));
     }
     return out;
 }
@@ -94,6 +99,23 @@ Stats analyse (const std::vector<float>& x)
 
 float dB (float lin) { return 20.0f * std::log10 (std::fmax (1.0e-9f, lin)); }
 
+// Rough band-energy probe so we can verify the voicing shifted as intended.
+// type=true => energy below `freq`; type=false => energy above `freq`.
+float bandRmsDb (const std::vector<float>& x, double fs, bool lowBand, double freq)
+{
+    apex::Biquad a = lowBand ? apex::Biquad::makeLowpass  (fs, freq, 0.707)
+                             : apex::Biquad::makeHighpass (fs, freq, 0.707);
+    apex::Biquad b = lowBand ? apex::Biquad::makeLowpass  (fs, freq, 0.707)
+                             : apex::Biquad::makeHighpass (fs, freq, 0.707);
+    double acc = 0.0;
+    for (float v : x)
+    {
+        float f = b.processSample (a.processSample (v));
+        acc += (double) f * f;
+    }
+    return dB ((float) std::sqrt (acc / std::fmax (1.0, (double) x.size())));
+}
+
 void runPreset (const char* name, const apex::AmpParams& p, const std::vector<float>& dry)
 {
     apex::AmpCore core;
@@ -104,9 +126,11 @@ void runPreset (const char* name, const apex::AmpParams& p, const std::vector<fl
     core.process (wet.data(), (int) wet.size());
 
     const Stats st = analyse (wet);
-    std::printf ("  [%-14s] peak=%6.2f dB  rms=%6.2f dB  %s\n",
-                 name, dB (st.peak), dB (st.rms),
-                 st.finite ? "OK (finite)" : "*** NON-FINITE OUTPUT ***");
+    const float lowDb  = bandRmsDb (wet, kSampleRate, true,  200.0);
+    const float highDb = bandRmsDb (wet, kSampleRate, false, 3000.0);
+    std::printf ("  [%-14s] peak=%6.2f  rms=%6.2f  low(<200)=%6.2f  high(>3k)=%6.2f  %s\n",
+                 name, dB (st.peak), dB (st.rms), lowDb, highDb,
+                 st.finite ? "OK" : "*** NON-FINITE ***");
 
     writeWav (std::string ("out_") + name + ".wav", wet, kSampleRate);
 }
