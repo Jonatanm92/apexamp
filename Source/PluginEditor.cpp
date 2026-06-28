@@ -129,16 +129,18 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     mk (kSag,      "sag",          "Sag");
     mk (kPower,    "powerDrive",   "Power");
     mk (kGate,     "gate",         "Gate");
+    mk (kPunch,    "outPunch",     "Punch");
+    mk (kLoud,     "outLoud",      "Loud");
     mk (kMaster,   "master",       "Master");
 
     for (auto* k : { kInput.get(), kGain.get(), kPush.get(), kTight.get(), kSuperCut.get(),
                      kBias.get(), kBass.get(), kMid.get(), kTreble.get(), kChug.get(),
                      kLowDrv.get(), kLowMix.get(), kSag.get(), kPower.get(), kGate.get(),
-                     kMaster.get() })
+                     kPunch.get(), kLoud.get(), kMaster.get() })
         addAndMakeVisible (k);
 
     updateIRLabel();
-    setSize (760, 420);
+    setSize (860, 430);
 }
 
 void ApexAmpEditor::updateIRLabel()
@@ -227,7 +229,9 @@ void ApexAmpEditor::resized()
 
     place (kGate.get(),     300, y2);
 
-    place (kSag.get(),      404, y2);
-    place (kPower.get(),    404 + 80,  y2);
-    place (kMaster.get(),   404 + 160, y2);
+    place (kSag.get(),      392, y2);
+    place (kPower.get(),    392 + 76,  y2);
+    place (kPunch.get(),    392 + 152, y2);
+    place (kLoud.get(),     392 + 228, y2);
+    place (kMaster.get(),   392 + 304, y2);
 }

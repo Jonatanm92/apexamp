@@ -3,6 +3,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include "dsp/AmpCore.h"
 #include "dsp/CabSim.h"
+#include "dsp/OutputStage.h"
 
 namespace apex
 {
@@ -39,6 +40,7 @@ public:
         {
             cores[ch].prepare (osRate);
             cabSim[ch].prepare (sampleRate);
+            outStage[ch].prepare (sampleRate);
         }
 
         juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock,
@@ -60,7 +62,7 @@ public:
     void reset()
     {
         if (oversampling) oversampling->reset();
-        for (int ch = 0; ch < 2; ++ch) { cores[ch].reset(); cabSim[ch].reset(); }
+        for (int ch = 0; ch < 2; ++ch) { cores[ch].reset(); cabSim[ch].reset(); outStage[ch].reset(); }
         convolution.reset();
     }
 
@@ -79,6 +81,12 @@ public:
     }
 
     void setMasterGainDb (float db) { outputGain.setGainDecibels (db); }
+
+    void setOutputParams (float punch01, float loudDb) noexcept
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            outStage[ch].setParams (punch01, loudDb);
+    }
 
     /** Load a user IR from a WAV/AIFF file. Switches the cab to convolution mode. */
     void loadCabIRFromFile (const juce::File& file)
@@ -132,6 +140,14 @@ public:
             }
         }
 
+        // --- output stage: punch + loud (no waveshaping, alias-free) ---
+        {
+            const int chs = (int) block.getNumChannels();
+            const int n   = (int) block.getNumSamples();
+            for (int ch = 0; ch < chs; ++ch)
+                outStage[juce::jmin (ch, 1)].process (block.getChannelPointer ((size_t) ch), n);
+        }
+
         juce::dsp::ProcessContextReplacing<float> gainCtx (block);
         outputGain.process (gainCtx);
     }
@@ -162,6 +178,7 @@ private:
 
     AmpCore cores[2];
     CabSim  cabSim[2];
+    OutputStage outStage[2];
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     juce::dsp::Convolution convolution;
     juce::dsp::Gain<float> outputGain;

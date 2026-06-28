@@ -63,7 +63,7 @@ private:
     // Knobs
     std::unique_ptr<Knob> kInput, kGain, kPush, kTight, kSuperCut, kBias,
                           kBass, kMid, kTreble, kChug, kLowDrv, kLowMix,
-                          kSag, kPower, kGate, kMaster;
+                          kSag, kPower, kGate, kPunch, kLoud, kMaster;
 
     std::unique_ptr<juce::FileChooser> chooser;
 
