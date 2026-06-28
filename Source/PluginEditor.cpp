@@ -31,9 +31,24 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
             {
                 const auto file = fc.getResult();
                 if (file.existsAsFile())
+                {
                     proc.loadCabIR (file);
+                    updateIRLabel();
+                }
             });
     };
+
+    addAndMakeVisible (clearIRButton);
+    clearIRButton.onClick = [this]
+    {
+        proc.clearCabIR();
+        updateIRLabel();
+    };
+
+    irLabel.setJustificationType (juce::Justification::centredLeft);
+    irLabel.setFont (juce::Font (12.0f));
+    irLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.7f));
+    addAndMakeVisible (irLabel);
 
     auto mk = [&apvts] (std::unique_ptr<Knob>& k, const char* id, const char* cap)
     {
@@ -54,14 +69,24 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     mk (kLowMix,   "lowDirtMix",   "Low Mix");
     mk (kSag,      "sag",          "Sag");
     mk (kPower,    "powerDrive",   "Power");
+    mk (kGate,     "gate",         "Gate");
     mk (kMaster,   "master",       "Master");
 
     for (auto* k : { kInput.get(), kGain.get(), kPush.get(), kTight.get(), kSuperCut.get(),
                      kBias.get(), kBass.get(), kMid.get(), kTreble.get(), kChug.get(),
-                     kLowDrv.get(), kLowMix.get(), kSag.get(), kPower.get(), kMaster.get() })
+                     kLowDrv.get(), kLowMix.get(), kSag.get(), kPower.get(), kGate.get(),
+                     kMaster.get() })
         addAndMakeVisible (k);
 
+    updateIRLabel();
     setSize (760, 420);
+}
+
+void ApexAmpEditor::updateIRLabel()
+{
+    const auto f = proc.getCabIRFile();
+    irLabel.setText (f.existsAsFile() ? ("IR: " + f.getFileName()) : "Built-in cab",
+                     juce::dontSendNotification);
 }
 
 void ApexAmpEditor::paint (juce::Graphics& g)
@@ -103,12 +128,16 @@ void ApexAmpEditor::resized()
 
     // top selector row
     auto top = area.removeFromTop (60);
-    channelBox.setBounds   (top.removeFromLeft (140).withSizeKeepingCentre (140, 26));
-    top.removeFromLeft (10);
-    tonestackBox.setBounds (top.removeFromLeft (160).withSizeKeepingCentre (160, 26));
-    top.removeFromLeft (20);
-    cabButton.setBounds    (top.removeFromLeft (70).withSizeKeepingCentre (70, 26));
-    loadIRButton.setBounds (top.removeFromLeft (110).withSizeKeepingCentre (110, 26));
+    channelBox.setBounds   (top.removeFromLeft (120).withSizeKeepingCentre (120, 26));
+    top.removeFromLeft (8);
+    tonestackBox.setBounds (top.removeFromLeft (140).withSizeKeepingCentre (140, 26));
+    top.removeFromLeft (12);
+    cabButton.setBounds    (top.removeFromLeft (56).withSizeKeepingCentre (56, 26));
+    loadIRButton.setBounds (top.removeFromLeft (90).withSizeKeepingCentre (90, 26));
+    top.removeFromLeft (6);
+    clearIRButton.setBounds (top.removeFromLeft (78).withSizeKeepingCentre (78, 26));
+    top.removeFromLeft (8);
+    irLabel.setBounds (top.withSizeKeepingCentre (top.getWidth(), 26));
 
     const int kw = 92, kh = 100;
     auto place = [kw, kh] (Knob* k, int x, int y) { k->setBounds (x, y, kw, kh); };
@@ -133,7 +162,9 @@ void ApexAmpEditor::resized()
     place (kSuperCut.get(), 16 + kw,  y2);
     place (kBias.get(),     16 + kw*2, y2);
 
-    place (kSag.get(),      400, y2);
-    place (kPower.get(),    400 + 92,  y2);
-    place (kMaster.get(),   400 + 184, y2);
+    place (kGate.get(),     300, y2);
+
+    place (kSag.get(),      404, y2);
+    place (kPower.get(),    404 + 80,  y2);
+    place (kMaster.get(),   404 + 160, y2);
 }

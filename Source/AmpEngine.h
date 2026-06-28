@@ -45,6 +45,12 @@ public:
                                       (juce::uint32) channels };
         convolution.prepare (spec);
 
+        // Re-load the user IR if one was set — convolution.prepare() clears it,
+        // and the host can re-prepare us at any time (this was the bug where a
+        // loaded IR seemed to "disappear" until something forced a reload).
+        if (userIRFile.existsAsFile())
+            loadIRInternal (userIRFile);
+
         outputGain.prepare (spec);
         outputGain.setRampDurationSeconds (0.02);
 
@@ -73,14 +79,20 @@ public:
     {
         if (file.existsAsFile())
         {
-            convolution.loadImpulseResponse (file,
-                juce::dsp::Convolution::Stereo::yes,
-                juce::dsp::Convolution::Trim::yes,
-                0,
-                juce::dsp::Convolution::Normalise::yes);
+            userIRFile = file;
+            loadIRInternal (file);
             usingUserIR = true;
         }
     }
+
+    /** Revert to the built-in filter cab. */
+    void clearCabIR() noexcept
+    {
+        usingUserIR = false;
+        userIRFile = juce::File();
+    }
+
+    juce::File getCabIRFile() const { return userIRFile; }
 
     void process (juce::dsp::AudioBlock<float>& block)
     {
@@ -124,6 +136,15 @@ public:
     }
 
 private:
+    void loadIRInternal (const juce::File& file)
+    {
+        convolution.loadImpulseResponse (file,
+            juce::dsp::Convolution::Stereo::yes,
+            juce::dsp::Convolution::Trim::yes,
+            0,
+            juce::dsp::Convolution::Normalise::yes);
+    }
+
     static constexpr int oversampleFactorLog2 = 3; // 8x — more headroom for high-gain, less aliasing
 
     double hostRate = 44100.0;
@@ -131,6 +152,7 @@ private:
     int    channels = 2;
     bool   cabEnabled = true;
     bool   usingUserIR = false;
+    juce::File userIRFile;
 
     AmpCore cores[2];
     CabSim  cabSim[2];

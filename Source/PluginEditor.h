@@ -53,13 +53,17 @@ private:
     juce::ToggleButton cabButton { "Cab" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> cabAtt;
     juce::TextButton loadIRButton { "Load IR..." };
+    juce::TextButton clearIRButton { "Built-in" };
+    juce::Label      irLabel;
 
     // Knobs
     std::unique_ptr<Knob> kInput, kGain, kPush, kTight, kSuperCut, kBias,
                           kBass, kMid, kTreble, kChug, kLowDrv, kLowMix,
-                          kSag, kPower, kMaster;
+                          kSag, kPower, kGate, kMaster;
 
     std::unique_ptr<juce::FileChooser> chooser;
+
+    void updateIRLabel();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ApexAmpEditor)
 };

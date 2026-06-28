@@ -36,7 +36,21 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
     /** Called by the editor when the user picks an IR file. */
-    void loadCabIR (const juce::File& file) { engine.loadCabIRFromFile (file); }
+    void loadCabIR (const juce::File& file)
+    {
+        engine.loadCabIRFromFile (file);
+        apvts.state.setProperty ("irPath", file.getFullPathName(), nullptr);
+    }
+
+    /** Revert to the built-in filter cab. */
+    void clearCabIR()
+    {
+        engine.clearCabIR();
+        apvts.state.setProperty ("irPath", "", nullptr);
+    }
+
+    /** Currently loaded IR file (or an empty File if using the built-in cab). */
+    juce::File getCabIRFile() const { return engine.getCabIRFile(); }
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();

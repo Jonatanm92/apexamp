@@ -19,6 +19,7 @@ namespace pid
     constexpr auto lowDirtMix = "lowDirtMix";
     constexpr auto sag        = "sag";
     constexpr auto powerDrive = "powerDrive";
+    constexpr auto gate       = "gate";
     constexpr auto cabOn      = "cabOn";
     constexpr auto master     = "master";
 }
@@ -72,6 +73,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::sag, 1 },        "Sag",         pct (0.3f), 0.3f));
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::powerDrive, 1 }, "Power Drive", pct (0.3f), 0.3f));
 
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::gate, 1 }, "Gate",
+        NormalisableRange<float> (-80.0f, -20.0f, 0.5f), -60.0f));
+
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::cabOn, 1 }, "Cab", true));
 
     layout.add (std::make_unique<AudioParameterFloat> (
@@ -107,6 +112,7 @@ apex::AmpParams ApexAmpProcessor::gatherParams()
 
     p.sag        = get (pid::sag);
     p.powerDrive = get (pid::powerDrive);
+    p.gateThresholdDb = get (pid::gate);
 
     return p;
 }
@@ -180,7 +186,18 @@ void ApexAmpProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     auto tree = juce::ValueTree::readFromData (data, (size_t) sizeInBytes);
     if (tree.isValid())
+    {
         apvts.replaceState (tree);
+
+        // Restore a previously loaded cab IR, if any.
+        const auto path = apvts.state.getProperty ("irPath", "").toString();
+        if (path.isNotEmpty())
+        {
+            const juce::File f (path);
+            if (f.existsAsFile())
+                engine.loadCabIRFromFile (f);
+        }
+    }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

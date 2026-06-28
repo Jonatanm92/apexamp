@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Biquad.h"
+#include "NoiseGate.h"
 #include "TubeStage.h"
 #include "Tonestack.h"
 #include "ChugEnhancer.h"
@@ -30,6 +31,8 @@ struct AmpParams
     float inputTrimDb = 0.0f;
     float outputTrimDb = 0.0f;
 
+    float gateThresholdDb = -60.0f;   // input noise gate (-80 = off)
+
     float gain     = 0.5f;   // preamp drive
     float push     = 0.0f;
     float tight    = 0.3f;
@@ -51,6 +54,7 @@ public:
     void prepare (double sampleRate) noexcept
     {
         fs = sampleRate;
+        gate.prepare (fs);
         inputHP.setCutoff (fs, 30.0);
         inputBiquad = Biquad::makeHighpass (fs, 70.0, 0.707);
         chug.prepare (fs);
@@ -64,6 +68,7 @@ public:
 
     void reset() noexcept
     {
+        gate.reset();
         inputHP.reset(); inputBiquad.reset();
         chug.reset(); preamp.reset(); tonestack.reset();
         lowDirt.reset(); powerAmp.reset();
@@ -78,6 +83,7 @@ public:
     inline float processSample (float x) noexcept
     {
         x *= inTrim;
+        x = gate.processSample (x);     // gate the DI before any gain (clarity!)
         x = inputHP.processSample (x);
         x = inputBiquad.processSample (x);
         x = chug.processSample (x);
@@ -101,6 +107,8 @@ private:
         inTrim  = std::pow (10.0f, params.inputTrimDb  / 20.0f);
         outTrim = std::pow (10.0f, params.outputTrimDb / 20.0f);
 
+        gate.setThreshold (params.gateThresholdDb);
+
         preamp.setChannel (params.channel);
         preamp.setParams (params.gain, params.push, params.tight,
                           params.superCut, params.bias);
@@ -119,6 +127,7 @@ private:
 
     DCBlocker inputHP;
     Biquad    inputBiquad;
+    NoiseGate         gate;
     ChugEnhancer      chug;
     DualChannelPreamp preamp;
     Tonestack         tonestack;
