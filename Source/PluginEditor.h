@@ -4,6 +4,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "PluginProcessor.h"
 #include "Presets.h"
+#include "ApexLookAndFeel.h"
 
 /** A labelled rotary knob bundling a Slider + attachment + caption. */
 struct Knob : public juce::Component
@@ -40,13 +41,14 @@ class ApexAmpEditor : public juce::AudioProcessorEditor
 {
 public:
     explicit ApexAmpEditor (ApexAmpProcessor&);
-    ~ApexAmpEditor() override = default;
+    ~ApexAmpEditor() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
     ApexAmpProcessor& proc;
+    ApexLookAndFeel lnf;
 
     juce::ComboBox presetBox;
     juce::TextButton savePresetButton { "Save" }, loadPresetButton { "Load" };

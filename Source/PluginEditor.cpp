@@ -3,6 +3,8 @@
 ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     : juce::AudioProcessorEditor (&p), proc (p)
 {
+    setLookAndFeel (&lnf);
+
     auto& apvts = proc.apvts;
 
     // --- preset bar ---
@@ -148,6 +150,11 @@ void ApexAmpEditor::updateIRLabel()
     const auto f = proc.getCabIRFile();
     irLabel.setText (f.existsAsFile() ? ("IR: " + f.getFileName()) : "Built-in cab",
                      juce::dontSendNotification);
+}
+
+ApexAmpEditor::~ApexAmpEditor()
+{
+    setLookAndFeel (nullptr);
 }
 
 void ApexAmpEditor::paint (juce::Graphics& g)
