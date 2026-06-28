@@ -33,9 +33,12 @@ public:
         dcBlock.setCutoff (fs, 12.0);
         setHighpass (100.0);
         // Post-clip upper-mid lift = the "grind"/presence a cathode-bypass cap adds.
-        presence = Biquad::makeHighShelf (fs, 1800.0, 0.7, 2.5);
-        // Interstage lowpass — kept high so the cab does the final taming.
-        miller = Biquad::makeLowpass (fs, 15000.0, 0.707);
+        // Kept modest because this stacks across the cascade — too much here turns
+        // amplified hiss/fizz into harsh high-frequency noise.
+        presence = Biquad::makeHighShelf (fs, 1800.0, 0.7, 1.3);
+        // Interstage lowpass — rolls off ultrasonic hiss/aliasing per stage while
+        // leaving the 2-5 kHz bite intact.
+        miller = Biquad::makeLowpass (fs, 11000.0, 0.707);
         reset();
     }
 

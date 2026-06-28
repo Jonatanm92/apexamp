@@ -28,7 +28,7 @@ public:
         fs = sampleRate;
         detector.prepare (fs);
         detector.setTimes (0.2f, 5.0f);   // fast level detection
-        attackMs = 1.0f; holdMs = 40.0f; releaseMs = 120.0f;
+        attackMs = 1.0f; holdMs = 60.0f; releaseMs = 180.0f;
         updateCoeffs();
         setThreshold (-60.0f);
         reset();
@@ -39,13 +39,15 @@ public:
         detector.reset();
         gain = 0.0f;
         holdCounter = 0;
+        gateOpen = false;
     }
 
     /** Threshold in dBFS (of the DI). <= -79 dB disables the gate (always open). */
     void setThreshold (float thresholdDb) noexcept
     {
-        threshLin = std::pow (10.0f, thresholdDb / 20.0f);
-        enabled   = thresholdDb > -79.0f;
+        threshLin      = std::pow (10.0f, thresholdDb / 20.0f);
+        closeThreshLin = std::pow (10.0f, (thresholdDb - hysteresisDb) / 20.0f);
+        enabled        = thresholdDb > -79.0f;
     }
 
     inline float processSample (float x) noexcept
@@ -55,22 +57,31 @@ public:
 
         const float level = detector.processSample (x);
 
-        float targetGain;
-        if (level >= threshLin)
+        // Hysteresis + hold: open above threshold, but only close once the level
+        // drops below a lower threshold AND the hold time has elapsed. This stops
+        // the chattering / stuttering of a naive gate and preserves note tails.
+        if (gateOpen)
         {
-            targetGain = 1.0f;
-            holdCounter = holdSamples;
-        }
-        else if (holdCounter > 0)
-        {
-            --holdCounter;
-            targetGain = 1.0f;
+            if (level < closeThreshLin)
+            {
+                if (holdCounter > 0) --holdCounter;
+                else                 gateOpen = false;
+            }
+            else
+            {
+                holdCounter = holdSamples;
+            }
         }
         else
         {
-            targetGain = 0.0f;
+            if (level > threshLin)
+            {
+                gateOpen = true;
+                holdCounter = holdSamples;
+            }
         }
 
+        const float targetGain = gateOpen ? 1.0f : 0.0f;
         const float c = (targetGain > gain) ? atkCoeff : relCoeff;
         gain += c * (targetGain - gain);
         return x * gain;
@@ -96,7 +107,10 @@ private:
     int    holdSamples = 0, holdCounter = 0;
 
     float  threshLin = 0.001f;
+    float  closeThreshLin = 0.0005f;
+    static constexpr float hysteresisDb = 8.0f;
     bool   enabled = true;
+    bool   gateOpen = false;
     float  gain = 0.0f;
 
     EnvelopeFollower detector;
