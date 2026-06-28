@@ -52,6 +52,21 @@ public:
     /** Currently loaded IR file (or an empty File if using the built-in cab). */
     juce::File getCabIRFile() const { return engine.getCabIRFile(); }
 
+    /** Save/load a full preset (parameters + IR path) to a .apreset file. */
+    void savePresetToFile (const juce::File& file)
+    {
+        juce::MemoryBlock mb;
+        getStateInformation (mb);
+        file.replaceWithData (mb.getData(), mb.getSize());
+    }
+
+    void loadPresetFromFile (const juce::File& file)
+    {
+        juce::MemoryBlock mb;
+        if (file.loadFileAsData (mb))
+            setStateInformation (mb.getData(), (int) mb.getSize());
+    }
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     apex::AmpParams gatherParams();

@@ -5,6 +5,60 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
 {
     auto& apvts = proc.apvts;
 
+    // --- preset bar ---
+    {
+        const auto presets = apexpresets::factory();
+        for (int i = 0; i < (int) presets.size(); ++i)
+            presetBox.addItem (presets[i].name, i + 1);
+        presetBox.setTextWhenNothingSelected ("Presets");
+        addAndMakeVisible (presetBox);
+        presetBox.onChange = [this]
+        {
+            const int id = presetBox.getSelectedId();
+            const auto list = apexpresets::factory();
+            if (id >= 1 && id <= (int) list.size())
+                apexpresets::apply (proc.apvts, list[(size_t) (id - 1)]);
+        };
+    }
+
+    addAndMakeVisible (savePresetButton);
+    savePresetButton.onClick = [this]
+    {
+        chooser = std::make_unique<juce::FileChooser> (
+            "Save preset", juce::File{}, "*.apreset");
+        chooser->launchAsync (juce::FileBrowserComponent::saveMode
+                              | juce::FileBrowserComponent::canSelectFiles
+                              | juce::FileBrowserComponent::warnAboutOverwriting,
+            [this] (const juce::FileChooser& fc)
+            {
+                auto f = fc.getResult();
+                if (f != juce::File{})
+                {
+                    if (f.getFileExtension().isEmpty())
+                        f = f.withFileExtension ("apreset");
+                    proc.savePresetToFile (f);
+                }
+            });
+    };
+
+    addAndMakeVisible (loadPresetButton);
+    loadPresetButton.onClick = [this]
+    {
+        chooser = std::make_unique<juce::FileChooser> (
+            "Load preset", juce::File{}, "*.apreset");
+        chooser->launchAsync (juce::FileBrowserComponent::openMode
+                              | juce::FileBrowserComponent::canSelectFiles,
+            [this] (const juce::FileChooser& fc)
+            {
+                const auto f = fc.getResult();
+                if (f.existsAsFile())
+                {
+                    proc.loadPresetFromFile (f);
+                    updateIRLabel();
+                }
+            });
+    };
+
     // --- selectors ---
     channelBox.addItemList ({ "Tight", "Scoop" }, 1);
     addAndMakeVisible (channelBox);
@@ -123,6 +177,12 @@ void ApexAmpEditor::paint (juce::Graphics& g)
 
 void ApexAmpEditor::resized()
 {
+    // Preset bar lives in the title band (top-right), so the knob layout below
+    // is unaffected.
+    presetBox.setBounds        (300, 12, 246, 26);
+    savePresetButton.setBounds (552, 12, 88, 26);
+    loadPresetButton.setBounds (646, 12, 88, 26);
+
     auto area = getLocalBounds().reduced (12);
     area.removeFromTop (40); // title
 

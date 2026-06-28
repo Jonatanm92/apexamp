@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "PluginProcessor.h"
+#include "Presets.h"
 
 /** A labelled rotary knob bundling a Slider + attachment + caption. */
 struct Knob : public juce::Component
@@ -46,6 +47,9 @@ public:
 
 private:
     ApexAmpProcessor& proc;
+
+    juce::ComboBox presetBox;
+    juce::TextButton savePresetButton { "Save" }, loadPresetButton { "Load" };
 
     juce::ComboBox channelBox, tonestackBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> channelAtt, tonestackAtt;
