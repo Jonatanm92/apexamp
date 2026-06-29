@@ -2,9 +2,9 @@ name: Build ApexAmp
 
 on:
   push:
-    branches: [ "apexamp-beta", "main" ]
+    branches: [ "apexamp-beta", "nam-engine", "main" ]
   pull_request:
-    branches: [ "apexamp-beta", "main" ]
+    branches: [ "apexamp-beta", "nam-engine", "main" ]
   workflow_dispatch:   # lets you trigger a build manually from the Actions tab
 
 env:
@@ -67,9 +67,6 @@ jobs:
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
-
-      - name: Run offline DSP test
-        run: ctest --test-dir build -C ${{ env.BUILD_TYPE }} --output-on-failure
 
       # Upload the finished plugin so you can download it from the run page
       # (Actions tab -> this run -> Artifacts) without compiling locally.

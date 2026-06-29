@@ -1,28 +1,18 @@
 #include "PluginProcessor.h"
-#include "PluginEditor.h"
 
 namespace pid
 {
-    constexpr auto channel    = "channel";
-    constexpr auto tonestack  = "tonestack";
-    constexpr auto inputTrim  = "inputTrim";
-    constexpr auto gain       = "gain";
-    constexpr auto push       = "push";
-    constexpr auto tight      = "tight";
-    constexpr auto superCut   = "superCut";
-    constexpr auto bias       = "bias";
-    constexpr auto bass       = "bass";
-    constexpr auto mid        = "mid";
-    constexpr auto treble     = "treble";
-    constexpr auto chug       = "chug";
-    constexpr auto lowDirtDrv = "lowDirtDrive";
-    constexpr auto lowDirtMix = "lowDirtMix";
-    constexpr auto sag        = "sag";
-    constexpr auto powerDrive = "powerDrive";
-    constexpr auto gate       = "gate";
+    constexpr auto inputGain  = "inputGain";
+    constexpr auto outputGain = "outputGain";
+    constexpr auto rigMode    = "rigMode";
+    constexpr auto rig        = "rig";
+    constexpr auto mixBite    = "mixBite";
+    constexpr auto mixBody    = "mixBody";
+    constexpr auto mixEdge    = "mixEdge";
     constexpr auto cabOn      = "cabOn";
-    constexpr auto cabType    = "cabType";
-    constexpr auto master     = "master";
+    constexpr auto ir         = "ir";
+    constexpr auto gateOn     = "gateOn";
+    constexpr auto gate       = "gate";
 }
 
 ApexAmpProcessor::ApexAmpProcessor()
@@ -38,86 +28,61 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout layout;
 
-    auto pct = [] (float def) {
-        return NormalisableRange<float> (0.0f, 1.0f, 0.001f);
-    };
-
-    layout.add (std::make_unique<AudioParameterChoice> (
-        ParameterID { pid::channel, 1 }, "Channel",
-        StringArray { "Tight", "Scoop" }, 0));
-
-    layout.add (std::make_unique<AudioParameterChoice> (
-        ParameterID { pid::tonestack, 1 }, "Tonestack",
-        StringArray { "Marshall", "Fender", "Mesa", "Modern Metal" }, 0));
-
     layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { pid::inputTrim, 1 }, "Input Trim",
+        ParameterID { pid::inputGain, 1 }, "Input Gain",
         NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f));
 
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::gain, 1 },     "Gain",      pct (0.5f), 0.5f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::push, 1 },     "Push",      pct (0.0f), 0.0f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::tight, 1 },    "Tight",     pct (0.3f), 0.3f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::superCut, 1 }, "Super Cut", pct (0.0f), 0.0f));
-
     layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { pid::bias, 1 }, "Bias",
-        NormalisableRange<float> (-0.1f, 0.1f, 0.001f), 0.02f));
+        ParameterID { pid::outputGain, 1 }, "Output Gain",
+        NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f));
 
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::bass, 1 },   "Bass",   pct (0.5f), 0.5f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::mid, 1 },    "Mid",    pct (0.5f), 0.5f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::treble, 1 }, "Treble", pct (0.5f), 0.5f));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { pid::rigMode, 1 }, "Rig Mode",
+        StringArray { "Single", "Blend" }, 0));
 
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::chug, 1 },       "Chug",          pct (0.0f), 0.0f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::lowDirtDrv, 1 }, "Low Dirt Drive",pct (0.0f), 0.0f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::lowDirtMix, 1 }, "Low Dirt Mix",  pct (0.0f), 0.0f));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { pid::rig, 1 }, "Rig",
+        StringArray { "Bite", "Body", "Edge" }, 0));
 
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::sag, 1 },        "Sag",         pct (0.3f), 0.3f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::powerDrive, 1 }, "Power Drive", pct (0.3f), 0.3f));
-
-    layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { pid::gate, 1 }, "Gate",
-        NormalisableRange<float> (-80.0f, -20.0f, 0.5f), -60.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::mixBite, 1 }, "Blend: Bite",
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::mixBody, 1 }, "Blend: Body",
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::mixEdge, 1 }, "Blend: Edge",
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::cabOn, 1 }, "Cab", true));
 
     layout.add (std::make_unique<AudioParameterChoice> (
-        ParameterID { pid::cabType, 1 }, "Cab Type",
-        StringArray { "Modern V30", "Vintage Greenback", "Tight 4x12", "American Scooped" }, 0));
+        ParameterID { pid::ir, 1 }, "Cabinet IR",
+        StringArray { "Ashen", "Meshuggah", "PDI-09" }, 0));
+
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::gateOn, 1 }, "Gate", false));
 
     layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { pid::master, 1 }, "Master",
-        NormalisableRange<float> (-36.0f, 12.0f, 0.1f), -6.0f));
+        ParameterID { pid::gate, 1 }, "Gate Threshold",
+        NormalisableRange<float> (-80.0f, -20.0f, 0.5f), -60.0f));
 
     return layout;
 }
 
-apex::AmpParams ApexAmpProcessor::gatherParams()
+NamEngine::Params ApexAmpProcessor::gatherParams()
 {
-    apex::AmpParams p;
+    NamEngine::Params p;
     auto get = [this] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
 
-    p.channel   = (int) get (pid::channel) == 0 ? apex::PreampChannel::tight
-                                                : apex::PreampChannel::scoop;
-    p.tonestack = (apex::TonestackModel) (int) get (pid::tonestack);
-
-    p.inputTrimDb = get (pid::inputTrim);
-    p.gain     = get (pid::gain);
-    p.push     = get (pid::push);
-    p.tight    = get (pid::tight);
-    p.superCut = get (pid::superCut);
-    p.bias     = get (pid::bias);
-
-    p.bass   = get (pid::bass);
-    p.mid    = get (pid::mid);
-    p.treble = get (pid::treble);
-
-    p.chug         = get (pid::chug);
-    p.lowDirtDrive = get (pid::lowDirtDrv);
-    p.lowDirtMix   = get (pid::lowDirtMix);
-
-    p.sag        = get (pid::sag);
-    p.powerDrive = get (pid::powerDrive);
-    p.gateThresholdDb = get (pid::gate);
+    p.inputGainDb  = get (pid::inputGain);
+    p.outputGainDb = get (pid::outputGain);
+    p.rigMode      = ((int) get (pid::rigMode) == 1) ? NamEngine::RigMode::Blend
+                                                     : NamEngine::RigMode::Single;
+    p.singleIndex  = (int) get (pid::rig);
+    p.mix[0]       = get (pid::mixBite);
+    p.mix[1]       = get (pid::mixBody);
+    p.mix[2]       = get (pid::mixEdge);
+    p.irEnabled    = get (pid::cabOn) > 0.5f;
+    p.irIndex      = (int) get (pid::ir);
+    p.gateEnabled  = get (pid::gateOn) > 0.5f;
+    p.gateThreshDb = get (pid::gate);
 
     return p;
 }
@@ -125,7 +90,6 @@ apex::AmpParams ApexAmpProcessor::gatherParams()
 void ApexAmpProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels());
-    setLatencySamples (engine.getLatencySamples());
 }
 
 bool ApexAmpProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -142,41 +106,17 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 
     const int totalIn  = getTotalNumInputChannels();
     const int totalOut = getTotalNumOutputChannels();
-    const int numSamples = buffer.getNumSamples();
 
-    // --- collapse input to mono ---------------------------------------------
-    // A guitar is a mono source, and it may be plugged into ANY physical input
-    // (e.g. only input 2 on the interface). Summing all input channels into
-    // channel 0 means the amp always "hears" the guitar regardless of which
-    // input it is on, and avoids the hard-panned / half-silent sound you get
-    // when a mono guitar is fed into a stereo path.
-    if (totalIn > 1)
-    {
-        auto* dst = buffer.getWritePointer (0);
-        for (int ch = 1; ch < totalIn; ++ch)
-        {
-            const auto* src = buffer.getReadPointer (ch);
-            for (int i = 0; i < numSamples; ++i)
-                dst[i] += src[i];
-        }
-    }
+    // Clear any output-only channels.
+    for (int ch = totalIn; ch < totalOut; ++ch)
+        buffer.clear (ch, 0, buffer.getNumSamples());
 
-    // Mirror the mono signal to every output channel (centred, dual-mono out).
-    for (int ch = 1; ch < totalOut; ++ch)
-        buffer.copyFrom (ch, 0, buffer, 0, 0, numSamples);
-
-    engine.setParams (gatherParams());
-    engine.setCabEnabled (apvts.getRawParameterValue (pid::cabOn)->load() > 0.5f);
-    engine.setCabType ((apex::CabType) (int) apvts.getRawParameterValue (pid::cabType)->load());
-    engine.setMasterGainDb (apvts.getRawParameterValue (pid::master)->load());
-
-    juce::dsp::AudioBlock<float> block (buffer);
-    engine.process (block);
+    engine.process (buffer, gatherParams());
 }
 
 juce::AudioProcessorEditor* ApexAmpProcessor::createEditor()
 {
-    return new ApexAmpEditor (*this);
+    return new juce::GenericAudioProcessorEditor (*this);
 }
 
 void ApexAmpProcessor::getStateInformation (juce::MemoryBlock& destData)
@@ -192,18 +132,7 @@ void ApexAmpProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     auto tree = juce::ValueTree::readFromData (data, (size_t) sizeInBytes);
     if (tree.isValid())
-    {
         apvts.replaceState (tree);
-
-        // Restore a previously loaded cab IR, if any.
-        const auto path = apvts.state.getProperty ("irPath", "").toString();
-        if (path.isNotEmpty())
-        {
-            const juce::File f (path);
-            if (f.existsAsFile())
-                engine.loadCabIRFromFile (f);
-        }
-    }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
