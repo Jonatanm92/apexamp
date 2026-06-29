@@ -1,0 +1,43 @@
+ApexAmp
+Copyright (c) 2026 Jonatan Murberger (PolychromeNext). All rights reserved.
+
+This software and its source code are proprietary and confidential. No license,
+right, or permission to use, copy, modify, merge, publish, distribute, sublicense,
+or sell copies of this software is granted except by a separate written agreement
+with the copyright holder.
+
+You may build the software from this repository for your own personal evaluation
+and development. You may not redistribute the source or compiled binaries, in whole
+or in part, without prior written permission.
+
+--------------------------------------------------------------------------------
+THIRD-PARTY COMPONENTS — IMPORTANT BEFORE SELLING
+--------------------------------------------------------------------------------
+
+This product is built on third-party frameworks whose licenses you MUST comply
+with before any commercial distribution:
+
+1. JUCE (https://juce.com)
+   JUCE is dual-licensed. Open-source use falls under the AGPLv3; closed-source
+   commercial distribution of a plugin requires a paid JUCE licence (or the
+   applicable JUCE EULA tier). If you intend to SELL ApexAmp as closed source,
+   you must obtain the appropriate JUCE licence first. See https://juce.com/get-juce
+
+2. Steinberg ASIO SDK
+   ASIO is a trademark and software of Steinberg Media Technologies GmbH. The ASIO
+   SDK is used only to compile ASIO support; it is not redistributed in this
+   repository. Distributing an ASIO-enabled product is subject to Steinberg's ASIO
+   SDK Licensing Agreement, which you must accept/comply with.
+
+3. VST3 SDK (bundled with JUCE)
+   The VST3 format is a Steinberg technology under the Steinberg VST3 licence
+   (GPLv3 or the proprietary Steinberg VST3 licence). Comply with its terms for
+   commercial distribution.
+
+4. Cabinet impulse responses (IRs)
+   ApexAmp ships only its own original filter-based cab voicings. Any third-party
+   IR files you load or distribute remain under their respective licences — do not
+   bundle or redistribute commercial/copyrighted IRs without permission.
+
+Bottom line: the ApexAmp code is yours, but obtain a JUCE commercial licence and
+satisfy the Steinberg ASIO/VST3 terms before selling.

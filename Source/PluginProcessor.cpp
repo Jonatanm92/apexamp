@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <cmath>
 
 namespace pid
 {
@@ -19,7 +20,20 @@ namespace pid
     constexpr auto lowDirtMix = "lowDirtMix";
     constexpr auto sag        = "sag";
     constexpr auto powerDrive = "powerDrive";
+    constexpr auto gate       = "gate";
+    constexpr auto boostOn    = "boostOn";
+    constexpr auto boostDrive = "boostDrive";
+    constexpr auto boostTone  = "boostTone";
     constexpr auto cabOn      = "cabOn";
+    constexpr auto cabType    = "cabType";
+    constexpr auto cabBlend   = "cabBlend";
+    constexpr auto outPunch   = "outPunch";
+    constexpr auto outLoud    = "outLoud";
+    constexpr auto autoTight  = "autoTight";
+    constexpr auto width      = "width";
+    constexpr auto whammyOn   = "whammyOn";
+    constexpr auto whammyShift= "whammyShift";
+    constexpr auto whammyMix  = "whammyMix";
     constexpr auto master     = "master";
 }
 
@@ -72,7 +86,36 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::sag, 1 },        "Sag",         pct (0.3f), 0.3f));
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::powerDrive, 1 }, "Power Drive", pct (0.3f), 0.3f));
 
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::gate, 1 }, "Gate",
+        NormalisableRange<float> (-80.0f, -20.0f, 0.5f), -60.0f));
+
+    layout.add (std::make_unique<AudioParameterBool>  (ParameterID { pid::boostOn, 1 },    "Boost", false));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::boostDrive, 1 }, "Boost Drive", pct (0.5f), 0.5f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::boostTone, 1 },  "Boost Tone",  pct (0.5f), 0.5f));
+
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::cabOn, 1 }, "Cab", true));
+
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { pid::cabType, 1 }, "Cab Type",
+        StringArray { "Modern V30", "Vintage Greenback", "Tight 4x12", "American Scooped" }, 0));
+
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::cabBlend, 1 }, "IR Blend",
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
+
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::outPunch, 1 }, "Punch",
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::outLoud, 1 }, "Loud",
+        NormalisableRange<float> (0.0f, 12.0f, 0.1f), 0.0f));
+
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::autoTight, 1 }, "Auto Tight", pct (0.0f), 0.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::width, 1 },     "Width",      pct (0.0f), 0.0f));
+
+    layout.add (std::make_unique<AudioParameterBool>  (ParameterID { pid::whammyOn, 1 }, "Whammy", false));
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::whammyShift, 1 }, "Whammy Shift",
+        NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 12.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::whammyMix, 1 }, "Whammy Mix", pct (1.0f), 1.0f));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { pid::master, 1 }, "Master",
@@ -107,6 +150,14 @@ apex::AmpParams ApexAmpProcessor::gatherParams()
 
     p.sag        = get (pid::sag);
     p.powerDrive = get (pid::powerDrive);
+    p.gateThresholdDb = get (pid::gate);
+
+    p.boostOn    = get (pid::boostOn) > 0.5f;
+    p.boostDrive = get (pid::boostDrive);
+    p.boostTone  = get (pid::boostTone);
+
+    p.autoTight  = get (pid::autoTight);
+    p.trackedHz  = pitchDetector.getFrequency(); // feed the tuner pitch into adaptive tightness
 
     return p;
 }
@@ -114,6 +165,7 @@ apex::AmpParams ApexAmpProcessor::gatherParams()
 void ApexAmpProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels());
+    pitchDetector.prepare (sampleRate, samplesPerBlock);
     setLatencySamples (engine.getLatencySamples());
 }
 
@@ -131,15 +183,74 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 
     const int totalIn  = getTotalNumInputChannels();
     const int totalOut = getTotalNumOutputChannels();
-    for (int ch = totalIn; ch < totalOut; ++ch)
-        buffer.clear (ch, 0, buffer.getNumSamples());
+    const int numSamples = buffer.getNumSamples();
+
+    // --- collapse input to mono ---------------------------------------------
+    // A guitar is a mono source, and it may be plugged into ANY physical input
+    // (e.g. only input 2 on the interface). Summing all input channels into
+    // channel 0 means the amp always "hears" the guitar regardless of which
+    // input it is on, and avoids the hard-panned / half-silent sound you get
+    // when a mono guitar is fed into a stereo path.
+    if (totalIn > 1)
+    {
+        auto* dst = buffer.getWritePointer (0);
+        for (int ch = 1; ch < totalIn; ++ch)
+        {
+            const auto* src = buffer.getReadPointer (ch);
+            for (int i = 0; i < numSamples; ++i)
+                dst[i] += src[i];
+        }
+    }
+
+    // Mirror the mono signal to every output channel (centred, dual-mono out).
+    for (int ch = 1; ch < totalOut; ++ch)
+        buffer.copyFrom (ch, 0, buffer, 0, 0, numSamples);
+
+    // Feed the tuner from the dry mono DI (before the amp processes it) and
+    // measure the input level for the meter.
+    float inPk = 0.0f;
+    if (buffer.getNumChannels() > 0)
+    {
+        const float* di = buffer.getReadPointer (0);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            pitchDetector.pushSample (di[i]);
+            inPk = juce::jmax (inPk, std::abs (di[i]));
+        }
+    }
+    inLevel.store (inPk);
 
     engine.setParams (gatherParams());
     engine.setCabEnabled (apvts.getRawParameterValue (pid::cabOn)->load() > 0.5f);
+    engine.setCabType ((apex::CabType) (int) apvts.getRawParameterValue (pid::cabType)->load());
+    engine.setCabBlend (apvts.getRawParameterValue (pid::cabBlend)->load());
+    engine.setOutputParams (apvts.getRawParameterValue (pid::outPunch)->load(),
+                            apvts.getRawParameterValue (pid::outLoud)->load());
+    engine.setWidth (apvts.getRawParameterValue (pid::width)->load());
+    engine.setWhammy (apvts.getRawParameterValue (pid::whammyOn)->load() > 0.5f,
+                      apvts.getRawParameterValue (pid::whammyShift)->load(),
+                      apvts.getRawParameterValue (pid::whammyMix)->load());
     engine.setMasterGainDb (apvts.getRawParameterValue (pid::master)->load());
 
     juce::dsp::AudioBlock<float> block (buffer);
     engine.process (block);
+
+    // Output safety + level metering: scrub any non-finite samples (so a bad IR
+    // or extreme setting can never blast NaNs/garbage to the speakers) and track
+    // the output peak for the meter.
+    float outPk = 0.0f;
+    for (int ch = 0; ch < totalOut; ++ch)
+    {
+        auto* d = buffer.getWritePointer (ch);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            float v = d[i];
+            if (! std::isfinite (v)) { v = 0.0f; d[i] = 0.0f; }
+            outPk = juce::jmax (outPk, std::abs (v));
+        }
+    }
+    outLevel.store (outPk);
+    tunerFreq.store (pitchDetector.getFrequency());
 }
 
 juce::AudioProcessorEditor* ApexAmpProcessor::createEditor()
@@ -160,7 +271,25 @@ void ApexAmpProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     auto tree = juce::ValueTree::readFromData (data, (size_t) sizeInBytes);
     if (tree.isValid())
+    {
         apvts.replaceState (tree);
+
+        // Restore previously loaded cab IRs, if any.
+        const auto path = apvts.state.getProperty ("irPath", "").toString();
+        if (path.isNotEmpty())
+        {
+            const juce::File f (path);
+            if (f.existsAsFile())
+                engine.loadCabIRFromFile (f);
+        }
+        const auto pathB = apvts.state.getProperty ("irPathB", "").toString();
+        if (pathB.isNotEmpty())
+        {
+            const juce::File f (pathB);
+            if (f.existsAsFile())
+                engine.loadCabIRBFromFile (f);
+        }
+    }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
