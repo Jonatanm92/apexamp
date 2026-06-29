@@ -21,6 +21,9 @@ namespace pid
     constexpr auto sag        = "sag";
     constexpr auto powerDrive = "powerDrive";
     constexpr auto gate       = "gate";
+    constexpr auto boostOn    = "boostOn";
+    constexpr auto boostDrive = "boostDrive";
+    constexpr auto boostTone  = "boostTone";
     constexpr auto cabOn      = "cabOn";
     constexpr auto cabType    = "cabType";
     constexpr auto cabBlend   = "cabBlend";
@@ -82,6 +85,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
         ParameterID { pid::gate, 1 }, "Gate",
         NormalisableRange<float> (-80.0f, -20.0f, 0.5f), -60.0f));
 
+    layout.add (std::make_unique<AudioParameterBool>  (ParameterID { pid::boostOn, 1 },    "Boost", false));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::boostDrive, 1 }, "Boost Drive", pct (0.5f), 0.5f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::boostTone, 1 },  "Boost Tone",  pct (0.5f), 0.5f));
+
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::cabOn, 1 }, "Cab", true));
 
     layout.add (std::make_unique<AudioParameterChoice> (
@@ -130,6 +137,10 @@ apex::AmpParams ApexAmpProcessor::gatherParams()
     p.sag        = get (pid::sag);
     p.powerDrive = get (pid::powerDrive);
     p.gateThresholdDb = get (pid::gate);
+
+    p.boostOn    = get (pid::boostOn) > 0.5f;
+    p.boostDrive = get (pid::boostDrive);
+    p.boostTone  = get (pid::boostTone);
 
     return p;
 }

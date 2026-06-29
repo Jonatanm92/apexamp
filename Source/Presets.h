@@ -98,6 +98,16 @@ inline std::vector<Preset> factory()
             { "cabOn", 1.0f }, { "cabType", 1 }, { "cabBlend", 0.0f },
             { "outPunch", 0.0f }, { "outLoud", 1.0f }, { "master", -6.0f }
         }},
+        { "Boosted Djent", {
+            { "channel", 1 }, { "tonestack", 3 }, { "inputTrim", 0.0f },
+            { "gain", 0.7f }, { "push", 0.4f }, { "tight", 0.85f }, { "superCut", 0.55f }, { "bias", 0.0f },
+            { "bass", 0.38f }, { "mid", 0.42f }, { "treble", 0.66f },
+            { "chug", 0.6f }, { "lowDirtDrive", 0.45f }, { "lowDirtMix", 0.28f },
+            { "sag", 0.35f }, { "powerDrive", 0.5f }, { "gate", -40.0f },
+            { "boostOn", 1.0f }, { "boostDrive", 0.55f }, { "boostTone", 0.55f },
+            { "cabOn", 1.0f }, { "cabType", 2 }, { "cabBlend", 0.0f },
+            { "outPunch", 0.3f }, { "outLoud", 2.0f }, { "master", -6.0f }
+        }},
         { "Clean (Fender)", {
             { "channel", 0 }, { "tonestack", 1 }, { "inputTrim", 0.0f },
             { "gain", 0.2f }, { "push", 0.0f }, { "tight", 0.25f }, { "superCut", 0.0f }, { "bias", 0.02f },

@@ -84,6 +84,10 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     cabTypeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
         apvts, "cabType", cabTypeBox);
 
+    addAndMakeVisible (boostButton);
+    boostAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
+        apvts, "boostOn", boostButton);
+
     addAndMakeVisible (cabButton);
     cabAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
         apvts, "cabOn", cabButton);
@@ -147,6 +151,8 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     mk (kTight,    "tight",        "Tight");
     mk (kSuperCut, "superCut",     "Super Cut");
     mk (kBias,     "bias",         "Bias");
+    mk (kBoostDrv, "boostDrive",   "Bst Drv");
+    mk (kBoostTone,"boostTone",    "Bst Tone");
     mk (kBass,     "bass",         "Bass");
     mk (kMid,      "mid",          "Mid");
     mk (kTreble,   "treble",       "Treble");
@@ -162,9 +168,9 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     mk (kMaster,   "master",       "Master");
 
     for (auto* k : { kInput.get(), kGain.get(), kPush.get(), kTight.get(), kSuperCut.get(),
-                     kBias.get(), kBass.get(), kMid.get(), kTreble.get(), kChug.get(),
-                     kLowDrv.get(), kLowMix.get(), kBlend.get(), kSag.get(), kPower.get(),
-                     kGate.get(), kPunch.get(), kLoud.get(), kMaster.get() })
+                     kBias.get(), kBoostDrv.get(), kBoostTone.get(), kBass.get(), kMid.get(),
+                     kTreble.get(), kChug.get(), kLowDrv.get(), kLowMix.get(), kBlend.get(),
+                     kSag.get(), kPower.get(), kGate.get(), kPunch.get(), kLoud.get(), kMaster.get() })
         addAndMakeVisible (k);
 
     updateIRLabel();
@@ -308,11 +314,13 @@ void ApexAmpEditor::resized()
             knobs[(size_t) i]->setBounds (content.getX() + i * w, content.getY(), w, content.getHeight());
     };
 
-    // combos sit in panel title bands (right side)
-    channelBox.setBounds   (rcPreamp.getRight() - 120, rcPreamp.getY() + 4, 108, 20);
+    // combos + boost toggle sit in panel title bands (right side)
+    channelBox.setBounds   (rcPreamp.getRight() - 116, rcPreamp.getY() + 4, 104, 20);
+    boostButton.setBounds  (rcPreamp.getRight() - 190, rcPreamp.getY() + 4, 68, 20);
     tonestackBox.setBounds (rcTone.getRight()  - 124, rcTone.getY()  + 4, 116, 20);
 
-    knobRow (rcPreamp, { kInput.get(), kGain.get(), kPush.get(), kTight.get(), kSuperCut.get(), kBias.get() });
+    knobRow (rcPreamp, { kInput.get(), kGain.get(), kPush.get(), kTight.get(), kSuperCut.get(),
+                         kBias.get(), kBoostDrv.get(), kBoostTone.get() });
     knobRow (rcTone,   { kBass.get(), kMid.get(), kTreble.get() });
     knobRow (rcDyn,    { kGate.get(), kChug.get(), kLowDrv.get(), kLowMix.get() });
     knobRow (rcOut,    { kSag.get(), kPower.get(), kPunch.get(), kLoud.get(), kMaster.get() });

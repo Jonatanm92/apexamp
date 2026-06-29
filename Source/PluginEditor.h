@@ -183,6 +183,9 @@ private:
     juce::ComboBox channelBox, tonestackBox, cabTypeBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> channelAtt, tonestackAtt, cabTypeAtt;
 
+    juce::ToggleButton boostButton { "BOOST" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> boostAtt;
+
     juce::ToggleButton cabButton { "Cab" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> cabAtt;
     juce::TextButton loadIRButton { "IR A..." };
@@ -193,6 +196,7 @@ private:
     // Knobs
     std::unique_ptr<Knob> kInput, kGain, kPush, kTight, kSuperCut, kBias,
                           kBass, kMid, kTreble, kChug, kLowDrv, kLowMix, kBlend,
+                          kBoostDrv, kBoostTone,
                           kSag, kPower, kGate, kPunch, kLoud, kMaster;
 
     std::unique_ptr<juce::FileChooser> chooser;
