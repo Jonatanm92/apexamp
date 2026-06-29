@@ -164,7 +164,22 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
         addAndMakeVisible (k);
 
     updateIRLabel();
-    setSize (860, 430);
+    setSize (960, 560);
+}
+
+void ApexAmpEditor::layoutRects()
+{
+    const int M = 14, gap = 12;
+    const int W = getWidth();
+    rcHeader = { M, 14, W - 2 * M, 60 };
+
+    const int r1y = 82, r2y = 298, rh = 204;
+    rcPreamp = { M,                 r1y, 470, rh };
+    rcTone   = { M + 470 + gap,     r1y, 196, rh };
+    rcDyn    = { M + 470 + 196 + 2 * gap, r1y,
+                 W - M - (M + 470 + 196 + 2 * gap), rh };
+    rcCab    = { M,                 r2y, 470, rh };
+    rcOut    = { M + 470 + gap,     r2y, W - M - (M + 470 + gap), rh };
 }
 
 void ApexAmpEditor::updateIRLabel()
@@ -190,89 +205,108 @@ ApexAmpEditor::~ApexAmpEditor()
 
 void ApexAmpEditor::paint (juce::Graphics& g)
 {
-    juce::ColourGradient grad (juce::Colour (0xff1b1d22), 0, 0,
-                               juce::Colour (0xff0c0d10), 0, (float) getHeight(), false);
-    g.setGradientFill (grad);
+    using namespace juce;
+    layoutRects();
+
+    // background
+    ColourGradient bgGrad (lnf.bg.brighter (0.05f), 0, 0, lnf.bg.darker (0.4f), 0, (float) getHeight(), false);
+    g.setGradientFill (bgGrad);
     g.fillAll();
 
-    g.setColour (juce::Colours::white.withAlpha (0.9f));
-    g.setFont (juce::Font (26.0f, juce::Font::bold));
-    g.drawText ("APEX AMP", 16, 10, 300, 32, juce::Justification::left);
-
-    g.setColour (juce::Colours::orange.withAlpha (0.8f));
-    g.setFont (juce::Font (12.0f));
-    g.drawText ("beta", 150, 20, 60, 18, juce::Justification::left);
-
-    // section dividers
-    g.setColour (juce::Colours::white.withAlpha (0.08f));
-    g.drawHorizontalLine (110, 12.0f, (float) getWidth() - 12.0f);
-    g.drawHorizontalLine (250, 12.0f, (float) getWidth() - 12.0f);
-
-    auto sectionLabel = [&g] (const juce::String& t, int x, int y)
+    auto drawPanel = [&] (Rectangle<int> r, const String& title)
     {
-        g.setColour (juce::Colours::white.withAlpha (0.45f));
-        g.setFont (juce::Font (11.0f, juce::Font::bold));
-        g.drawText (t, x, y, 160, 14, juce::Justification::left);
+        g.setColour (lnf.panel);
+        g.fillRoundedRectangle (r.toFloat(), 8.0f);
+        g.setColour (lnf.line);
+        g.drawRoundedRectangle (r.toFloat(), 8.0f, 1.2f);
+        g.setColour (lnf.accent);
+        g.setFont (Font (12.0f, Font::bold));
+        g.drawText (title, r.getX() + 12, r.getY() + 6, r.getWidth() - 24, 16, Justification::left);
+        g.setColour (lnf.accent.withAlpha (0.30f));
+        g.fillRect ((float) r.getX() + 12.0f, (float) r.getY() + 24.0f, (float) r.getWidth() - 24.0f, 1.0f);
     };
-    sectionLabel ("PREAMP",    16, 116);
-    sectionLabel ("TONE",      300, 116);
-    sectionLabel ("DYNAMICS",  500, 116);
-    sectionLabel ("POWER / OUTPUT", 16, 256);
+
+    // header bar
+    g.setColour (lnf.panel);
+    g.fillRoundedRectangle (rcHeader.toFloat(), 8.0f);
+    g.setColour (lnf.line);
+    g.drawRoundedRectangle (rcHeader.toFloat(), 8.0f, 1.2f);
+
+    g.setFont (Font (30.0f, Font::bold));
+    g.setColour (Colours::white);
+    g.drawText ("APEX", rcHeader.getX() + 16, rcHeader.getY() + 12, 86, 34, Justification::left);
+    g.setColour (lnf.accent);
+    g.drawText ("AMP", rcHeader.getX() + 100, rcHeader.getY() + 12, 80, 34, Justification::left);
+    g.setColour (Colours::white.withAlpha (0.35f));
+    g.setFont (Font (10.5f, Font::bold));
+    g.drawText ("HIGH-GAIN AMP", rcHeader.getX() + 17, rcHeader.getY() + 40, 160, 12, Justification::left);
+
+    // panels
+    drawPanel (rcPreamp, "PREAMP");
+    drawPanel (rcTone,   "TONE");
+    drawPanel (rcDyn,    "DYNAMICS");
+    drawPanel (rcCab,    "CABINET");
+    drawPanel (rcOut,    "POWER / OUTPUT");
+
+    // footer
+    g.setColour (Colours::white.withAlpha (0.3f));
+    g.setFont (Font (11.0f));
+    g.drawText ("ApexAmp  v0.1 beta", 16, getHeight() - 24, 300, 16, Justification::left);
+    g.drawText ("PolychromeNext", getWidth() - 216, getHeight() - 24, 200, 16, Justification::right);
 }
 
 void ApexAmpEditor::resized()
 {
-    // Preset bar + tuner live in the title band (top), so the knob layout below
-    // is unaffected.
-    presetBox.setBounds        (214, 12, 196, 26);
-    savePresetButton.setBounds (414, 12, 60, 26);
-    loadPresetButton.setBounds (478, 12, 60, 26);
-    tuner.setBounds            (596, 6, 252, 34);
+    layoutRects();
 
-    auto area = getLocalBounds().reduced (12);
-    area.removeFromTop (40); // title
+    // --- header controls ---
+    presetBox.setBounds        (rcHeader.getX() + 200, rcHeader.getY() + 17, 176, 26);
+    savePresetButton.setBounds (rcHeader.getX() + 382, rcHeader.getY() + 17, 54, 26);
+    loadPresetButton.setBounds (rcHeader.getX() + 440, rcHeader.getY() + 17, 54, 26);
+    tuner.setBounds            (rcHeader.getRight() - 258, rcHeader.getY() + 13, 246, 34);
 
-    // top selector row
-    auto top = area.removeFromTop (60);
-    auto row = top.withSizeKeepingCentre (top.getWidth(), 26);
-    channelBox.setBounds   (row.removeFromLeft (96));  row.removeFromLeft (5);
-    tonestackBox.setBounds (row.removeFromLeft (118)); row.removeFromLeft (5);
-    cabTypeBox.setBounds   (row.removeFromLeft (140)); row.removeFromLeft (5);
-    cabButton.setBounds    (row.removeFromLeft (44));  row.removeFromLeft (4);
-    loadIRButton.setBounds (row.removeFromLeft (60));  row.removeFromLeft (4);
-    loadIRBButton.setBounds (row.removeFromLeft (60)); row.removeFromLeft (4);
-    clearIRButton.setBounds (row.removeFromLeft (66)); row.removeFromLeft (6);
-    irLabel.setBounds (row);
+    // Place a horizontal row of knobs inside a panel's content area.
+    auto knobRow = [] (juce::Rectangle<int> panel, std::vector<Knob*> knobs)
+    {
+        auto content = panel.reduced (10);
+        content.removeFromTop (24);              // title band
+        const int n = (int) knobs.size();
+        if (n == 0) return;
+        const int w = content.getWidth() / n;
+        for (int i = 0; i < n; ++i)
+            knobs[(size_t) i]->setBounds (content.getX() + i * w, content.getY(), w, content.getHeight());
+    };
 
-    const int kw = 92, kh = 100;
-    auto place = [kw, kh] (Knob* k, int x, int y) { k->setBounds (x, y, kw, kh); };
+    // combos sit in panel title bands (right side)
+    channelBox.setBounds   (rcPreamp.getRight() - 120, rcPreamp.getY() + 4, 108, 20);
+    tonestackBox.setBounds (rcTone.getRight()  - 124, rcTone.getY()  + 4, 116, 20);
 
-    // Row 1 - preamp / tone / dynamics
-    int y1 = 140;
-    place (kInput.get(),    16,  y1);
-    place (kGain.get(),     16 + kw,  y1);
-    place (kPush.get(),     16 + kw*2, y1);
+    knobRow (rcPreamp, { kInput.get(), kGain.get(), kPush.get(), kTight.get(), kSuperCut.get(), kBias.get() });
+    knobRow (rcTone,   { kBass.get(), kMid.get(), kTreble.get() });
+    knobRow (rcDyn,    { kGate.get(), kChug.get(), kLowDrv.get(), kLowMix.get() });
+    knobRow (rcOut,    { kSag.get(), kPower.get(), kPunch.get(), kLoud.get(), kMaster.get() });
 
-    place (kBass.get(),     300, y1);
-    place (kMid.get(),      300 + 64,  y1);
-    place (kTreble.get(),   300 + 128, y1);
+    // --- cabinet panel (combo + buttons + IR label + blend knob) ---
+    {
+        auto cab = rcCab.reduced (10);
+        cab.removeFromTop (24); // title
 
-    place (kChug.get(),     500, y1);
-    place (kLowDrv.get(),   500 + 64,  y1);
-    place (kLowMix.get(),   500 + 128, y1);
-    place (kBlend.get(),    500 + 196, y1);
+        auto blendArea = cab.removeFromRight (96);
+        kBlend->setBounds (blendArea.withSizeKeepingCentre (96, juce::jmin (blendArea.getHeight(), 116)));
+        cab.removeFromRight (8);
 
-    // Row 2 - voicing detail + power/output
-    int y2 = 280;
-    place (kTight.get(),    16,  y2);
-    place (kSuperCut.get(), 16 + kw,  y2);
-    place (kBias.get(),     16 + kw*2, y2);
+        auto row1 = cab.removeFromTop (26);
+        cabTypeBox.setBounds (row1.removeFromLeft (158));
+        row1.removeFromLeft (8);
+        cabButton.setBounds (row1.removeFromLeft (60));
 
-    place (kGate.get(),     300, y2);
+        cab.removeFromTop (8);
+        auto row2 = cab.removeFromTop (26);
+        loadIRButton.setBounds  (row2.removeFromLeft (74)); row2.removeFromLeft (6);
+        loadIRBButton.setBounds (row2.removeFromLeft (74)); row2.removeFromLeft (6);
+        clearIRButton.setBounds (row2.removeFromLeft (78));
 
-    place (kSag.get(),      392, y2);
-    place (kPower.get(),    392 + 76,  y2);
-    place (kPunch.get(),    392 + 152, y2);
-    place (kLoud.get(),     392 + 228, y2);
-    place (kMaster.get(),   392 + 304, y2);
+        cab.removeFromTop (8);
+        irLabel.setBounds (cab.removeFromTop (40));
+    }
 }

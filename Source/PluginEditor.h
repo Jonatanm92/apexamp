@@ -6,6 +6,7 @@
 #include "Presets.h"
 #include "ApexLookAndFeel.h"
 #include <functional>
+#include <vector>
 #include <cmath>
 
 /** Small tuner readout: note name + cents needle, polled from the processor. */
@@ -128,6 +129,8 @@ private:
 
     std::unique_ptr<juce::FileChooser> chooser;
 
+    juce::Rectangle<int> rcHeader, rcPreamp, rcTone, rcDyn, rcCab, rcOut;
+    void layoutRects();
     void updateIRLabel();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ApexAmpEditor)
