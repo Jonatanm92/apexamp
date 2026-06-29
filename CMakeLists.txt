@@ -45,20 +45,31 @@ juce_add_binary_data(ApexAmpAssets SOURCES
     assets/ir_meshuggah.wav
     assets/ir_pdi09.wav)
 
-# NeuralAmpModelerCore: compile its sources directly into the plugin so the
-# architecture-parser static registrations are not stripped by the linker.
+# NeuralAmpModelerCore: built as its own static library. Each model
+# architecture (WaveNet, SlimmableContainer, ...) registers itself with a
+# file-scope static initializer. When NAM is linked normally from a static
+# archive, the linker DROPS those object files because nothing references them
+# directly -> get_dsp() then throws "No config parser registered for
+# architecture: SlimmableContainer" and the rig loads as null (silence).
+# We therefore link nam_core with WHOLE_ARCHIVE so every object file (and thus
+# every self-registration) is force-kept in the final plugin binaries.
 set(NAM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/NeuralAmpModelerCore)
 file(GLOB NAM_SOURCES "${NAM_DIR}/NAM/*.cpp" "${NAM_DIR}/NAM/*/*.cpp")
 
-target_sources(ApexAmp PRIVATE
-    Source/PluginProcessor.cpp
-    ${NAM_SOURCES})
-
-target_include_directories(ApexAmp PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/Source
+add_library(nam_core STATIC ${NAM_SOURCES})
+target_compile_features(nam_core PUBLIC cxx_std_20)
+target_compile_definitions(nam_core PUBLIC NAM_ENABLE_A2_FAST=1)
+target_include_directories(nam_core PUBLIC
     ${NAM_DIR}
     ${NAM_DIR}/Dependencies/eigen
     ${NAM_DIR}/Dependencies/nlohmann)
+set_target_properties(nam_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+target_sources(ApexAmp PRIVATE
+    Source/PluginProcessor.cpp)
+
+target_include_directories(ApexAmp PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/Source)
 
 target_compile_definitions(ApexAmp PUBLIC
     JUCE_WEB_BROWSER=0
@@ -71,6 +82,7 @@ target_compile_features(ApexAmp PRIVATE cxx_std_20)
 
 target_link_libraries(ApexAmp PRIVATE
     ApexAmpAssets
+    $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_core>
     juce::juce_audio_utils
     juce::juce_dsp
     PUBLIC
@@ -85,4 +97,23 @@ if(APEXAMP_ENABLE_ASIO AND ASIO_SDK_DIR)
     message(STATUS "ApexAmp: ASIO enabled, SDK at ${ASIO_SDK_DIR}")
     target_compile_definitions(ApexAmp PUBLIC JUCE_ASIO=1)
     target_include_directories(ApexAmp PRIVATE "${ASIO_SDK_DIR}/common")
+endif()
+
+# ------------------------------------------------------------------
+# Regression guard: prove the NAM rigs actually load and make sound.
+# This catches the linker-stripping bug (registrations dropped -> silent
+# plugin) before any binary is published.
+# ------------------------------------------------------------------
+option(APEXAMP_BUILD_TESTS "Build the NAM rig runtime audio check" ON)
+if(APEXAMP_BUILD_TESTS)
+    enable_testing()
+    add_executable(rig_runtime_check tools/rig_runtime_check.cpp)
+    target_link_libraries(rig_runtime_check PRIVATE
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_core>)
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(rig_runtime_check PRIVATE stdc++fs)
+    endif()
+    add_test(NAME rig_audio
+        COMMAND rig_runtime_check
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()

@@ -68,6 +68,12 @@ jobs:
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
 
+      # Regression guard: load the 3 NAM rigs and confirm they produce audio.
+      # Fails the build if the linker ever strips the architecture registrations
+      # again (which would ship a silent plugin).
+      - name: Verify NAM rigs produce audio
+        run: ctest --test-dir build -C ${{ env.BUILD_TYPE }} --output-on-failure
+
       # Upload the finished plugin so you can download it from the run page
       # (Actions tab -> this run -> Artifacts) without compiling locally.
       - name: Upload plugin
