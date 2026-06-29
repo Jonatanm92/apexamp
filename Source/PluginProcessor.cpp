@@ -91,7 +91,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
         NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
 
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::outPunch, 1 }, "Punch",
-        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.3f));
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::outLoud, 1 }, "Loud",
         NormalisableRange<float> (0.0f, 12.0f, 0.1f), 0.0f));
 

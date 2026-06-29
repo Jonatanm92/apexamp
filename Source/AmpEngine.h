@@ -193,16 +193,18 @@ public:
             }
         }
 
-        // --- output stage: punch + loud (no waveshaping, alias-free) ---
+        // --- master gain FIRST, so the output stage / limiter operate at the
+        //     user's chosen output level, not the hot internal level ---
+        juce::dsp::ProcessContextReplacing<float> gainCtx (block);
+        outputGain.process (gainCtx);
+
+        // --- output stage: punch + loud (no waveshaping, alias-free), post-fader ---
         {
             const int chs = (int) block.getNumChannels();
             const int n   = (int) block.getNumSamples();
             for (int ch = 0; ch < chs; ++ch)
                 outStage[juce::jmin (ch, 1)].process (block.getChannelPointer ((size_t) ch), n);
         }
-
-        juce::dsp::ProcessContextReplacing<float> gainCtx (block);
-        outputGain.process (gainCtx);
     }
 
     int getLatencySamples() const
