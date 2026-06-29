@@ -13,6 +13,7 @@ namespace pid
     constexpr auto ir         = "ir";
     constexpr auto gateOn     = "gateOn";
     constexpr auto gate       = "gate";
+    constexpr auto lowCut     = "lowCut";
 }
 
 ApexAmpProcessor::ApexAmpProcessor()
@@ -63,6 +64,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
         ParameterID { pid::gate, 1 }, "Gate Threshold",
         NormalisableRange<float> (-80.0f, -20.0f, 0.5f), -60.0f));
 
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::lowCut, 1 }, "Low Cut",
+        NormalisableRange<float> (20.0f, 300.0f, 1.0f, 0.5f), 80.0f));
+
     return layout;
 }
 
@@ -83,6 +88,7 @@ NamEngine::Params ApexAmpProcessor::gatherParams()
     p.irIndex      = (int) get (pid::ir);
     p.gateEnabled  = get (pid::gateOn) > 0.5f;
     p.gateThreshDb = get (pid::gate);
+    p.lowCutHz     = get (pid::lowCut);
 
     return p;
 }

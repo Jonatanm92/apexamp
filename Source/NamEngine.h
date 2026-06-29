@@ -43,6 +43,7 @@ public:
         bool    irEnabled    = true;
         bool    gateEnabled  = false;
         float   gateThreshDb = -60.0f;     // open above this
+        float   lowCutHz     = 80.0f;      // output high-pass to tame sub-bass
     };
 
     NamEngine() = default;
@@ -73,6 +74,13 @@ public:
 
         loadConvolvers (spec);
 
+        // Output low-cut (high-pass) to remove the sub-bass rumble a cranked
+        // high-gain amp produces. Default ~80 Hz keeps weight without flub.
+        lowCut.prepare (spec);
+        lowCut.setType (juce::dsp::StateVariableTPTFilterType::highpass);
+        lowCut.setResonance (0.707f);
+        lowCut.setCutoffFrequency (80.0f);
+
         // Gate state
         gateGain = 1.0f;
 
@@ -86,6 +94,7 @@ public:
                 rig->Reset (sampleRate, maxBlock);
         for (auto& c : convolvers)
             c.reset();
+        lowCut.reset();
         gateGain = 1.0f;
     }
 
@@ -179,9 +188,23 @@ public:
             juce::dsp::AudioBlock<float>          block (buffer);
             juce::dsp::ProcessContextReplacing<float> ctx (block);
             convolvers[(size_t) idx].process (ctx);
+
+            // A real cabinet IR rolls off most of the fizz/sub energy, so the
+            // convolved signal is much quieter than the dry amp. Apply the
+            // pre-measured broadband makeup so toggling the cab no longer
+            // causes a big level jump ("double cab" feel).
+            buffer.applyGain (cabMakeup[(size_t) idx]);
         }
 
-        // ---- 5) Output gain -----------------------------------------------------
+        // ---- 5) Output low-cut (high-pass) -------------------------------------
+        lowCut.setCutoffFrequency (juce::jlimit (20.0f, 300.0f, p.lowCutHz));
+        {
+            juce::dsp::AudioBlock<float>          block (buffer);
+            juce::dsp::ProcessContextReplacing<float> ctx (block);
+            lowCut.process (ctx);
+        }
+
+        // ---- 6) Output gain -----------------------------------------------------
         buffer.applyGain ((float) outGain);
     }
 
@@ -228,16 +251,122 @@ private:
             { BinaryData::ir_pdi09_wav,     BinaryData::ir_pdi09_wavSize },
         };
 
+        juce::WavAudioFormat wav;
+
+        // Reference amp signal for level measurement: noise through the first
+        // available rig, so the test source has a realistic (HF-rich) amp
+        // spectrum. The cab's job is to roll that off, so this captures the
+        // true cab-induced level drop.
+        std::vector<double> ampRef = makeAmpReference();
+        const double ampRefRms = rms (ampRef);
+
         for (size_t i = 0; i < 3; ++i)
         {
             convolvers[i].prepare (spec);
+
+            // Read the IR samples (mono-summed) to measure the real level drop
+            // it causes on the amp signal.
+            std::vector<float> irMono;
+            {
+                std::unique_ptr<juce::AudioFormatReader> reader (
+                    wav.createReaderFor (
+                        new juce::MemoryInputStream (irs[i].data, (size_t) irs[i].size, false),
+                        true));
+
+                if (reader != nullptr && reader->lengthInSamples > 0)
+                {
+                    const int chs = (int) reader->numChannels;
+                    const int len = (int) reader->lengthInSamples;
+                    juce::AudioBuffer<float> irBuf (juce::jmax (1, chs), len);
+                    reader->read (&irBuf, 0, len, 0, true, true);
+
+                    irMono.assign ((size_t) len, 0.0f);
+                    for (int ch = 0; ch < irBuf.getNumChannels(); ++ch)
+                    {
+                        const float* d = irBuf.getReadPointer (ch);
+                        for (int k = 0; k < len; ++k)
+                            irMono[(size_t) k] += d[k];
+                    }
+                    const float inv = 1.0f / (float) juce::jmax (1, irBuf.getNumChannels());
+                    for (auto& v : irMono) v *= inv;
+                }
+            }
+
+            // makeup = dryAmpRMS / cabbedAmpRMS  -> cab on/off level-matched.
+            double makeup = 1.0;
+            if (! irMono.empty() && ampRefRms > 1.0e-9)
+            {
+                const double wetRms = rmsOfConvolution (ampRef, irMono);
+                if (wetRms > 1.0e-9)
+                    makeup = ampRefRms / wetRms;
+            }
+            cabMakeup[i] = (float) juce::jlimit (0.0625, 64.0, makeup);
+
+            // Load WITHOUT JUCE normalisation; our measured makeup handles level.
             convolvers[i].loadImpulseResponse (
                 irs[i].data, (size_t) irs[i].size,
                 juce::dsp::Convolution::Stereo::no,
                 juce::dsp::Convolution::Trim::yes,
                 0,
-                juce::dsp::Convolution::Normalise::yes);
+                juce::dsp::Convolution::Normalise::no);
         }
+
+        // Restore rig states (the reference run disturbed the first rig).
+        for (auto& rig : rigs)
+            if (rig)
+                rig->Reset (sampleRate, maxBlock);
+    }
+
+    // ---- level-measurement helpers -----------------------------------------
+    std::vector<double> makeAmpReference()
+    {
+        const int L = 16384;
+        std::vector<double> x ((size_t) L);
+        std::uint32_t s = 22695477u;
+        auto rnd = [&] { s = s * 1664525u + 1013904223u;
+                         return ((double) s / (double) 0xFFFFFFFFu) * 2.0 - 1.0; };
+        for (int i = 0; i < L; ++i)
+            x[(size_t) i] = 0.1 * rnd();
+
+        // Find a loaded rig to colour the noise like a real amp.
+        for (size_t r = 0; r < rigs.size(); ++r)
+        {
+            if (! rigs[r]) continue;
+            rigs[r]->Reset (sampleRate, L);
+            std::vector<double> y ((size_t) L);
+            double* ip[1] = { x.data() };
+            double* op[1] = { y.data() };
+            rigs[r]->process (ip, op, L);
+            const double g = matchGain[r];
+            for (int i = 0; i < L; ++i) y[(size_t) i] *= g;
+            return y;
+        }
+        return x; // no rig: fall back to the raw noise
+    }
+
+    static double rms (const std::vector<double>& v)
+    {
+        if (v.empty()) return 0.0;
+        double e = 0.0; for (double x : v) e += x * x;
+        return std::sqrt (e / (double) v.size());
+    }
+
+    // RMS of (signal * ir), measured only over the fully-overlapped region.
+    static double rmsOfConvolution (const std::vector<double>& sig, const std::vector<float>& ir)
+    {
+        const int H = juce::jmin ((int) ir.size(), 4096); // cab energy is up front
+        const int L = (int) sig.size();
+        if (H <= 0 || L <= H) return 0.0;
+
+        double e = 0.0; long cnt = 0;
+        for (int i = H; i < L; ++i)
+        {
+            double acc = 0.0;
+            for (int k = 0; k < H; ++k)
+                acc += sig[(size_t) (i - k)] * (double) ir[(size_t) k];
+            e += acc * acc; ++cnt;
+        }
+        return cnt > 0 ? std::sqrt (e / (double) cnt) : 0.0;
     }
 
     //==============================================================================
@@ -252,6 +381,9 @@ private:
     std::array<double, 3> matchGain { 1.0, 1.0, 1.0 };
 
     std::array<juce::dsp::Convolution, 3> convolvers;
+    std::array<float, 3> cabMakeup { 1.0f, 1.0f, 1.0f }; // level-match cab on/off
+
+    juce::dsp::StateVariableTPTFilter<float> lowCut;     // output sub-bass high-pass
 
     std::vector<double> monoIn, rigOut, mixBuf;
 
