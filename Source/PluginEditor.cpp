@@ -159,18 +159,21 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     mk (kChug,     "chug",         "Chug");
     mk (kLowDrv,   "lowDirtDrive", "Low Drv");
     mk (kLowMix,   "lowDirtMix",   "Low Mix");
+    mk (kAutoTight,"autoTight",    "Auto Tt");
     mk (kBlend,    "cabBlend",     "IR Blend");
     mk (kSag,      "sag",          "Sag");
     mk (kPower,    "powerDrive",   "Power");
     mk (kGate,     "gate",         "Gate");
     mk (kPunch,    "outPunch",     "Punch");
     mk (kLoud,     "outLoud",      "Loud");
+    mk (kWidth,    "width",        "Width");
     mk (kMaster,   "master",       "Master");
 
     for (auto* k : { kInput.get(), kGain.get(), kPush.get(), kTight.get(), kSuperCut.get(),
                      kBias.get(), kBoostDrv.get(), kBoostTone.get(), kBass.get(), kMid.get(),
-                     kTreble.get(), kChug.get(), kLowDrv.get(), kLowMix.get(), kBlend.get(),
-                     kSag.get(), kPower.get(), kGate.get(), kPunch.get(), kLoud.get(), kMaster.get() })
+                     kTreble.get(), kChug.get(), kLowDrv.get(), kLowMix.get(), kAutoTight.get(),
+                     kBlend.get(), kSag.get(), kPower.get(), kGate.get(), kPunch.get(),
+                     kLoud.get(), kWidth.get(), kMaster.get() })
         addAndMakeVisible (k);
 
     updateIRLabel();
@@ -322,8 +325,8 @@ void ApexAmpEditor::resized()
     knobRow (rcPreamp, { kInput.get(), kGain.get(), kPush.get(), kTight.get(), kSuperCut.get(),
                          kBias.get(), kBoostDrv.get(), kBoostTone.get() });
     knobRow (rcTone,   { kBass.get(), kMid.get(), kTreble.get() });
-    knobRow (rcDyn,    { kGate.get(), kChug.get(), kLowDrv.get(), kLowMix.get() });
-    knobRow (rcOut,    { kSag.get(), kPower.get(), kPunch.get(), kLoud.get(), kMaster.get() });
+    knobRow (rcDyn,    { kGate.get(), kChug.get(), kLowDrv.get(), kLowMix.get(), kAutoTight.get() });
+    knobRow (rcOut,    { kSag.get(), kPower.get(), kPunch.get(), kLoud.get(), kWidth.get(), kMaster.get() });
 
     // --- cabinet panel (combo + buttons + IR label + blend knob) ---
     {

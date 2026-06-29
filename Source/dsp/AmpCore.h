@@ -43,6 +43,9 @@ struct AmpParams
     float superCut = 0.0f;
     float bias     = 0.02f;
 
+    float autoTight = 0.0f;  // pitch-adaptive tightness amount
+    float trackedHz = 0.0f;  // detected fundamental fed from the tuner
+
     float bass = 0.5f, mid = 0.5f, treble = 0.5f;
 
     float chug = 0.0f;
@@ -120,6 +123,7 @@ private:
         preamp.setChannel (params.channel);
         preamp.setParams (params.gain, params.push, params.tight,
                           params.superCut, params.bias);
+        preamp.setAdaptiveTight (params.autoTight, params.trackedHz);
 
         tonestack.setModel (params.tonestack);
         tonestack.setControls (params.bass, params.mid, params.treble);

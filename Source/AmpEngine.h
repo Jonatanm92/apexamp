@@ -4,6 +4,7 @@
 #include "dsp/AmpCore.h"
 #include "dsp/CabSim.h"
 #include "dsp/OutputStage.h"
+#include "dsp/Doubler.h"
 
 namespace apex
 {
@@ -42,6 +43,7 @@ public:
             cabSim[ch].prepare (sampleRate);
             outStage[ch].prepare (sampleRate);
         }
+        doubler.prepare (sampleRate);
 
         juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock,
                                       (juce::uint32) channels };
@@ -68,6 +70,7 @@ public:
     {
         if (oversampling) oversampling->reset();
         for (int ch = 0; ch < 2; ++ch) { cores[ch].reset(); cabSim[ch].reset(); outStage[ch].reset(); }
+        doubler.reset();
         convolution.reset();
         convolutionB.reset();
     }
@@ -93,6 +96,8 @@ public:
         for (int ch = 0; ch < 2; ++ch)
             outStage[ch].setParams (punch01, loudDb);
     }
+
+    void setWidth (float w) noexcept { doubler.setWidth (w); }
 
     /** Load a user IR from a WAV/AIFF file. Switches the cab to convolution mode. */
     void loadCabIRFromFile (const juce::File& file)
@@ -193,6 +198,11 @@ public:
             }
         }
 
+        // --- doubler / stereo widener (post-cab; centred mono at width 0) ---
+        if (block.getNumChannels() >= 2)
+            doubler.process (block.getChannelPointer (0), block.getChannelPointer (1),
+                             (int) block.getNumSamples());
+
         // --- master gain FIRST, so the output stage / limiter operate at the
         //     user's chosen output level, not the hot internal level ---
         juce::dsp::ProcessContextReplacing<float> gainCtx (block);
@@ -236,6 +246,7 @@ private:
     AmpCore cores[2];
     CabSim  cabSim[2];
     OutputStage outStage[2];
+    Doubler doubler;
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     juce::dsp::Convolution convolution, convolutionB;
     juce::AudioBuffer<float> scratch;

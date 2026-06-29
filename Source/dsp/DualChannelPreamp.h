@@ -66,6 +66,21 @@ public:
         recalc();
     }
 
+    /**
+        Pitch-adaptive tightness (unique feature). `amount` 0..1 blends in a
+        low-cut that tracks the detected fundamental `hz`, so the low end stays
+        equally tight whether you're in E standard or dropped to A/G — the HPF
+        follows your tuning instead of being fixed. Heavily smoothed so it tracks
+        the riff's register, and capped so single notes / leads keep their body.
+    */
+    void setAdaptiveTight (float amount, float hz) noexcept
+    {
+        autoTight = std::clamp (amount, 0.0f, 1.0f);
+        if (hz > 40.0f && hz < 500.0f)
+            smoothedHz += 0.05f * (hz - smoothedHz);
+        recalc();
+    }
+
     inline float processSample (float x) noexcept
     {
         // Pre-clip high-pass: more "tight" => higher corner already baked into coeffs.
@@ -111,15 +126,23 @@ private:
         {
             numActiveStages = 3;
             baseHP = 90.0f + tight * 90.0f;   // 90..180 Hz
-            tightHP = Biquad::makeHighpass (fs, baseHP, 0.707);
         }
         else
         {
             numActiveStages = 4;                            // more gain stages
             baseHP = 80.0f + tight * 80.0f;   // 80..160 Hz
-            tightHP = Biquad::makeHighpass (fs, baseHP, 0.707);
             scoopPre = Biquad::makePeak (fs, 550.0, 1.1, -10.0f); // scoop shape
         }
+
+        // Adaptive tightness: blend the base corner toward one that tracks the
+        // detected fundamental (just below it), so tightness scales with tuning.
+        if (autoTight > 0.0f)
+        {
+            const float adaptive = std::clamp (smoothedHz * 0.9f, 45.0f, 140.0f);
+            baseHP = baseHP * (1.0f - autoTight) + adaptive * autoTight;
+        }
+
+        tightHP = Biquad::makeHighpass (fs, baseHP, 0.707);
 
         // Quadratic gain taper => usable lower half, big top half.
         const float g = gain * gain;
@@ -141,6 +164,7 @@ private:
     int numActiveStages = 3;
 
     float gain = 0.5f, push = 0.0f, tight = 0.3f, superCut = 0.0f, bias = 0.02f;
+    float autoTight = 0.0f, smoothedHz = 82.0f;
 
     TubeStage stages[maxStages];
     Biquad tightHP, scoopPre, brightCap;

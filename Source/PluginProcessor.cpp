@@ -29,6 +29,8 @@ namespace pid
     constexpr auto cabBlend   = "cabBlend";
     constexpr auto outPunch   = "outPunch";
     constexpr auto outLoud    = "outLoud";
+    constexpr auto autoTight  = "autoTight";
+    constexpr auto width      = "width";
     constexpr auto master     = "master";
 }
 
@@ -103,6 +105,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::outLoud, 1 }, "Loud",
         NormalisableRange<float> (0.0f, 12.0f, 0.1f), 0.0f));
 
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::autoTight, 1 }, "Auto Tight", pct (0.0f), 0.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::width, 1 },     "Width",      pct (0.0f), 0.0f));
+
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { pid::master, 1 }, "Master",
         NormalisableRange<float> (-36.0f, 12.0f, 0.1f), -6.0f));
@@ -141,6 +146,9 @@ apex::AmpParams ApexAmpProcessor::gatherParams()
     p.boostOn    = get (pid::boostOn) > 0.5f;
     p.boostDrive = get (pid::boostDrive);
     p.boostTone  = get (pid::boostTone);
+
+    p.autoTight  = get (pid::autoTight);
+    p.trackedHz  = pitchDetector.getFrequency(); // feed the tuner pitch into adaptive tightness
 
     return p;
 }
@@ -209,6 +217,7 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     engine.setCabBlend (apvts.getRawParameterValue (pid::cabBlend)->load());
     engine.setOutputParams (apvts.getRawParameterValue (pid::outPunch)->load(),
                             apvts.getRawParameterValue (pid::outLoud)->load());
+    engine.setWidth (apvts.getRawParameterValue (pid::width)->load());
     engine.setMasterGainDb (apvts.getRawParameterValue (pid::master)->load());
 
     juce::dsp::AudioBlock<float> block (buffer);
