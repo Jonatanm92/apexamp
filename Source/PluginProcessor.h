@@ -66,6 +66,10 @@ public:
     /** Latest detected pitch in Hz for the tuner (0 = none). */
     float getTunerFrequency() const { return tunerFreq.load(); }
 
+    /** Peak input / output levels (linear, 0..~1+) for the UI meters. */
+    float getInputLevel()  const { return inLevel.load(); }
+    float getOutputLevel() const { return outLevel.load(); }
+
     /** Save/load a full preset (parameters + IR path) to a .apreset file. */
     void savePresetToFile (const juce::File& file)
     {
@@ -88,6 +92,8 @@ private:
     apex::AmpEngine engine;
     apex::PitchDetector pitchDetector;
     std::atomic<float> tunerFreq { 0.0f };
+    std::atomic<float> inLevel  { 0.0f };
+    std::atomic<float> outLevel { 0.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ApexAmpProcessor)
 };

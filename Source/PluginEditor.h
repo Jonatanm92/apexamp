@@ -64,6 +64,73 @@ struct TunerComponent : public juce::Component, private juce::Timer
     float freq = 0.0f;
 };
 
+/** IN/OUT level meters with decay ballistics + peak-hold, dB-scaled. */
+struct MetersComponent : public juce::Component, private juce::Timer
+{
+    std::function<float()> getIn, getOut;
+
+    MetersComponent() { startTimerHz (30); }
+    ~MetersComponent() override { stopTimer(); }
+
+    void timerCallback() override
+    {
+        auto upd = [] (float lvl, float& sm, float& pk)
+        {
+            sm = juce::jmax (lvl, sm * 0.80f);          // fast attack, smooth decay
+            pk = (lvl > pk) ? lvl : pk * 0.94f;          // peak hold
+        };
+        if (getIn)  upd (getIn(),  inSm,  inPk);
+        if (getOut) upd (getOut(), outSm, outPk);
+        repaint();
+    }
+
+    static float toNorm (float lin)
+    {
+        const float db = juce::Decibels::gainToDecibels (lin, -60.0f);
+        return juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 60.0f);
+    }
+
+    void drawBar (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& label,
+                  float sm, float pk)
+    {
+        auto lab = r.removeFromLeft (30);
+        g.setColour (juce::Colours::white.withAlpha (0.45f));
+        g.setFont (juce::Font (10.0f, juce::Font::bold));
+        g.drawText (label, lab, juce::Justification::centredLeft);
+
+        auto bar = r.toFloat().reduced (0.0f, 2.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.5f));
+        g.fillRoundedRectangle (bar, 2.0f);
+
+        const float n = toNorm (sm);
+        if (n > 0.001f)
+        {
+            auto fill = bar.withWidth (bar.getWidth() * n);
+            const juce::Colour col = n > 0.92f ? juce::Colour (0xffe23b3b)
+                                   : n > 0.78f ? juce::Colour (0xffffa54d)
+                                               : juce::Colour (0xff39d353);
+            g.setColour (col);
+            g.fillRoundedRectangle (fill, 2.0f);
+        }
+        const float pn = toNorm (pk);
+        if (pn > 0.001f)
+        {
+            const float px = bar.getX() + bar.getWidth() * pn;
+            g.setColour (juce::Colours::white.withAlpha (0.8f));
+            g.fillRect (px - 1.0f, bar.getY(), 1.6f, bar.getHeight());
+        }
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto r = getLocalBounds();
+        drawBar (g, r.removeFromTop (r.getHeight() / 2), "IN",  inSm,  inPk);
+        drawBar (g, r,                                   "OUT", outSm, outPk);
+    }
+
+    float inSm = 0, outSm = 0, inPk = 0, outPk = 0;
+};
+
 /** A labelled rotary knob bundling a Slider + attachment + caption. */
 struct Knob : public juce::Component
 {
@@ -111,6 +178,7 @@ private:
     juce::ComboBox presetBox;
     juce::TextButton savePresetButton { "Save" }, loadPresetButton { "Load" };
     TunerComponent tuner;
+    MetersComponent meters;
 
     juce::ComboBox channelBox, tonestackBox, cabTypeBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> channelAtt, tonestackAtt, cabTypeAtt;

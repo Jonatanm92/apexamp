@@ -168,3 +168,24 @@ Source/
 tests/
   offline_test.cpp      # DAW-free DSP harness
 ```
+
+
+## Metering
+
+The header shows live **IN / OUT** level meters (with peak-hold) and a **tuner**
+(note + cents). The output is also scrubbed for non-finite samples as a safety net,
+so a bad IR or extreme setting can never blast NaNs to your speakers.
+
+## License
+
+ApexAmp's code is proprietary — see [LICENSE](LICENSE). **Before selling**, note that
+the frameworks it builds on have their own terms you must satisfy:
+
+- **JUCE** is dual-licensed (AGPLv3 / commercial). Closed-source commercial sale
+  requires a paid JUCE licence — https://juce.com/get-juce
+- **Steinberg ASIO SDK** and **VST3 SDK** distribution are governed by Steinberg's
+  licences.
+- Ship only your **own** cab IRs; don't redistribute commercial/copyrighted IRs.
+
+The ApexAmp source is yours; just secure a JUCE commercial licence and comply with
+the Steinberg terms before commercial release.

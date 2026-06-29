@@ -64,6 +64,10 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     tuner.getFreq = [this] { return proc.getTunerFrequency(); };
     addAndMakeVisible (tuner);
 
+    meters.getIn  = [this] { return proc.getInputLevel(); };
+    meters.getOut = [this] { return proc.getOutputLevel(); };
+    addAndMakeVisible (meters);
+
     // --- selectors ---
     channelBox.addItemList ({ "Tight", "Scoop" }, 1);
     addAndMakeVisible (channelBox);
@@ -251,7 +255,7 @@ void ApexAmpEditor::paint (juce::Graphics& g)
     // footer
     g.setColour (Colours::white.withAlpha (0.3f));
     g.setFont (Font (11.0f));
-    g.drawText ("ApexAmp  v0.1 beta", 16, getHeight() - 24, 300, 16, Justification::left);
+    g.drawText ("ApexAmp  v0.2 beta", 16, getHeight() - 24, 300, 16, Justification::left);
     g.drawText ("PolychromeNext", getWidth() - 216, getHeight() - 24, 200, 16, Justification::right);
 }
 
@@ -263,6 +267,7 @@ void ApexAmpEditor::resized()
     presetBox.setBounds        (rcHeader.getX() + 200, rcHeader.getY() + 17, 176, 26);
     savePresetButton.setBounds (rcHeader.getX() + 382, rcHeader.getY() + 17, 54, 26);
     loadPresetButton.setBounds (rcHeader.getX() + 440, rcHeader.getY() + 17, 54, 26);
+    meters.setBounds           (rcHeader.getX() + 504, rcHeader.getY() + 13, 168, 34);
     tuner.setBounds            (rcHeader.getRight() - 258, rcHeader.getY() + 13, 246, 34);
 
     // Place a horizontal row of knobs inside a panel's content area.

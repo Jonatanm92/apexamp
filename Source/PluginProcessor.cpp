@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <cmath>
 
 namespace pid
 {
@@ -177,13 +178,19 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     for (int ch = 1; ch < totalOut; ++ch)
         buffer.copyFrom (ch, 0, buffer, 0, 0, numSamples);
 
-    // Feed the tuner from the dry mono DI (before the amp processes it).
+    // Feed the tuner from the dry mono DI (before the amp processes it) and
+    // measure the input level for the meter.
+    float inPk = 0.0f;
     if (buffer.getNumChannels() > 0)
     {
         const float* di = buffer.getReadPointer (0);
         for (int i = 0; i < numSamples; ++i)
+        {
             pitchDetector.pushSample (di[i]);
+            inPk = juce::jmax (inPk, std::abs (di[i]));
+        }
     }
+    inLevel.store (inPk);
 
     engine.setParams (gatherParams());
     engine.setCabEnabled (apvts.getRawParameterValue (pid::cabOn)->load() > 0.5f);
@@ -196,6 +203,21 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     juce::dsp::AudioBlock<float> block (buffer);
     engine.process (block);
 
+    // Output safety + level metering: scrub any non-finite samples (so a bad IR
+    // or extreme setting can never blast NaNs/garbage to the speakers) and track
+    // the output peak for the meter.
+    float outPk = 0.0f;
+    for (int ch = 0; ch < totalOut; ++ch)
+    {
+        auto* d = buffer.getWritePointer (ch);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            float v = d[i];
+            if (! std::isfinite (v)) { v = 0.0f; d[i] = 0.0f; }
+            outPk = juce::jmax (outPk, std::abs (v));
+        }
+    }
+    outLevel.store (outPk);
     tunerFreq.store (pitchDetector.getFrequency());
 }
 
