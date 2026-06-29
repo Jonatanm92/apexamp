@@ -88,6 +88,10 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     boostAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
         apvts, "boostOn", boostButton);
 
+    addAndMakeVisible (whammyButton);
+    whammyAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
+        apvts, "whammyOn", whammyButton);
+
     addAndMakeVisible (cabButton);
     cabAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
         apvts, "cabOn", cabButton);
@@ -167,17 +171,19 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     mk (kPunch,    "outPunch",     "Punch");
     mk (kLoud,     "outLoud",      "Loud");
     mk (kWidth,    "width",        "Width");
+    mk (kWhammyShift, "whammyShift", "Whammy");
+    mk (kWhammyMix,   "whammyMix",   "Wham Mix");
     mk (kMaster,   "master",       "Master");
 
     for (auto* k : { kInput.get(), kGain.get(), kPush.get(), kTight.get(), kSuperCut.get(),
                      kBias.get(), kBoostDrv.get(), kBoostTone.get(), kBass.get(), kMid.get(),
                      kTreble.get(), kChug.get(), kLowDrv.get(), kLowMix.get(), kAutoTight.get(),
                      kBlend.get(), kSag.get(), kPower.get(), kGate.get(), kPunch.get(),
-                     kLoud.get(), kWidth.get(), kMaster.get() })
+                     kLoud.get(), kWidth.get(), kWhammyShift.get(), kWhammyMix.get(), kMaster.get() })
         addAndMakeVisible (k);
 
     updateIRLabel();
-    setSize (960, 560);
+    setSize (960, 664);
 }
 
 void ApexAmpEditor::layoutRects()
@@ -193,6 +199,7 @@ void ApexAmpEditor::layoutRects()
                  W - M - (M + 470 + 196 + 2 * gap), rh };
     rcCab    = { M,                 r2y, 470, rh };
     rcOut    = { M + 470 + gap,     r2y, W - M - (M + 470 + gap), rh };
+    rcFx     = { M, r2y + rh + gap, W - 2 * M, 116 };
 }
 
 void ApexAmpEditor::updateIRLabel()
@@ -286,6 +293,7 @@ void ApexAmpEditor::paint (juce::Graphics& g)
     drawPanel (rcDyn,    "DYNAMICS");
     drawPanel (rcCab,    "CABINET");
     drawPanel (rcOut,    "POWER / OUTPUT");
+    drawPanel (rcFx,     "FX  /  WHAMMY");
 
     // footer
     g.setColour (Colours::white.withAlpha (0.28f));
@@ -326,7 +334,18 @@ void ApexAmpEditor::resized()
                          kBias.get(), kBoostDrv.get(), kBoostTone.get() });
     knobRow (rcTone,   { kBass.get(), kMid.get(), kTreble.get() });
     knobRow (rcDyn,    { kGate.get(), kChug.get(), kLowDrv.get(), kLowMix.get(), kAutoTight.get() });
-    knobRow (rcOut,    { kSag.get(), kPower.get(), kPunch.get(), kLoud.get(), kWidth.get(), kMaster.get() });
+    knobRow (rcOut,    { kSag.get(), kPower.get(), kPunch.get(), kLoud.get(), kMaster.get() });
+
+    // --- FX / Whammy panel ---
+    {
+        whammyButton.setBounds (rcFx.getX() + 150, rcFx.getY() + 4, 80, 20);
+        auto fx = rcFx.reduced (10);
+        fx.removeFromTop (24); // title
+        const int kw = 104;
+        kWhammyShift->setBounds (fx.getX() + 4,          fx.getY(), kw, fx.getHeight());
+        kWhammyMix->setBounds   (fx.getX() + 4 + kw,     fx.getY(), kw, fx.getHeight());
+        kWidth->setBounds       (fx.getX() + 4 + kw * 2, fx.getY(), kw, fx.getHeight());
+    }
 
     // --- cabinet panel (combo + buttons + IR label + blend knob) ---
     {

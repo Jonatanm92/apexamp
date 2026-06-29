@@ -31,6 +31,9 @@ namespace pid
     constexpr auto outLoud    = "outLoud";
     constexpr auto autoTight  = "autoTight";
     constexpr auto width      = "width";
+    constexpr auto whammyOn   = "whammyOn";
+    constexpr auto whammyShift= "whammyShift";
+    constexpr auto whammyMix  = "whammyMix";
     constexpr auto master     = "master";
 }
 
@@ -107,6 +110,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
 
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::autoTight, 1 }, "Auto Tight", pct (0.0f), 0.0f));
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::width, 1 },     "Width",      pct (0.0f), 0.0f));
+
+    layout.add (std::make_unique<AudioParameterBool>  (ParameterID { pid::whammyOn, 1 }, "Whammy", false));
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::whammyShift, 1 }, "Whammy Shift",
+        NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 12.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::whammyMix, 1 }, "Whammy Mix", pct (1.0f), 1.0f));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { pid::master, 1 }, "Master",
@@ -218,6 +227,9 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     engine.setOutputParams (apvts.getRawParameterValue (pid::outPunch)->load(),
                             apvts.getRawParameterValue (pid::outLoud)->load());
     engine.setWidth (apvts.getRawParameterValue (pid::width)->load());
+    engine.setWhammy (apvts.getRawParameterValue (pid::whammyOn)->load() > 0.5f,
+                      apvts.getRawParameterValue (pid::whammyShift)->load(),
+                      apvts.getRawParameterValue (pid::whammyMix)->load());
     engine.setMasterGainDb (apvts.getRawParameterValue (pid::master)->load());
 
     juce::dsp::AudioBlock<float> block (buffer);

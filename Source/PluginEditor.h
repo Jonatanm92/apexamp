@@ -186,6 +186,9 @@ private:
     juce::ToggleButton boostButton { "BOOST" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> boostAtt;
 
+    juce::ToggleButton whammyButton { "WHAMMY" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> whammyAtt;
+
     juce::ToggleButton cabButton { "Cab" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> cabAtt;
     juce::TextButton loadIRButton { "IR A..." };
@@ -197,11 +200,12 @@ private:
     std::unique_ptr<Knob> kInput, kGain, kPush, kTight, kSuperCut, kBias,
                           kBass, kMid, kTreble, kChug, kLowDrv, kLowMix, kBlend,
                           kBoostDrv, kBoostTone, kAutoTight, kWidth,
+                          kWhammyShift, kWhammyMix,
                           kSag, kPower, kGate, kPunch, kLoud, kMaster;
 
     std::unique_ptr<juce::FileChooser> chooser;
 
-    juce::Rectangle<int> rcHeader, rcPreamp, rcTone, rcDyn, rcCab, rcOut;
+    juce::Rectangle<int> rcHeader, rcPreamp, rcTone, rcDyn, rcCab, rcOut, rcFx;
     void layoutRects();
     void updateIRLabel();
 

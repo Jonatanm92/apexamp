@@ -5,6 +5,7 @@
 #include "dsp/CabSim.h"
 #include "dsp/OutputStage.h"
 #include "dsp/Doubler.h"
+#include "dsp/PitchShifter.h"
 
 namespace apex
 {
@@ -44,6 +45,7 @@ public:
             outStage[ch].prepare (sampleRate);
         }
         doubler.prepare (sampleRate);
+        whammy.prepare (sampleRate);
 
         juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock,
                                       (juce::uint32) channels };
@@ -71,6 +73,7 @@ public:
         if (oversampling) oversampling->reset();
         for (int ch = 0; ch < 2; ++ch) { cores[ch].reset(); cabSim[ch].reset(); outStage[ch].reset(); }
         doubler.reset();
+        whammy.reset();
         convolution.reset();
         convolutionB.reset();
     }
@@ -98,6 +101,11 @@ public:
     }
 
     void setWidth (float w) noexcept { doubler.setWidth (w); }
+
+    void setWhammy (bool on, float semitones, float mix) noexcept
+    {
+        whammy.setParams (on, semitones, mix);
+    }
 
     /** Load a user IR from a WAV/AIFF file. Switches the cab to convolution mode. */
     void loadCabIRFromFile (const juce::File& file)
@@ -138,6 +146,19 @@ public:
 
     void process (juce::dsp::AudioBlock<float>& block)
     {
+        // --- whammy (pitch shift) in front of the amp, on the mono input ---
+        {
+            const int n = (int) block.getNumSamples();
+            const int numCh = (int) block.getNumChannels();
+            if (numCh > 0)
+            {
+                whammy.process (block.getChannelPointer (0), n);
+                for (int ch = 1; ch < numCh; ++ch)
+                    juce::FloatVectorOperations::copy (block.getChannelPointer ((size_t) ch),
+                                                       block.getChannelPointer (0), n);
+            }
+        }
+
         // --- oversampled nonlinear amp ---
         auto osBlock = oversampling->processSamplesUp (block);
 
@@ -247,6 +268,7 @@ private:
     CabSim  cabSim[2];
     OutputStage outStage[2];
     Doubler doubler;
+    PitchShifter whammy;
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     juce::dsp::Convolution convolution, convolutionB;
     juce::AudioBuffer<float> scratch;
