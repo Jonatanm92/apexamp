@@ -212,40 +212,66 @@ void ApexAmpEditor::paint (juce::Graphics& g)
     using namespace juce;
     layoutRects();
 
-    // background
-    ColourGradient bgGrad (lnf.bg.brighter (0.05f), 0, 0, lnf.bg.darker (0.4f), 0, (float) getHeight(), false);
+    // ---- background: gradient + faint brushed lines + frame ----
+    ColourGradient bgGrad (Colour (0xff1a1d24), 0, 0, Colour (0xff0c0d11), 0, (float) getHeight(), false);
     g.setGradientFill (bgGrad);
     g.fillAll();
+    g.setColour (Colours::white.withAlpha (0.012f));
+    for (int yy = 0; yy < getHeight(); yy += 3)
+        g.drawHorizontalLine (yy, 0.0f, (float) getWidth());
 
     auto drawPanel = [&] (Rectangle<int> r, const String& title)
     {
-        g.setColour (lnf.panel);
-        g.fillRoundedRectangle (r.toFloat(), 8.0f);
+        auto rf = r.toFloat();
+        g.setColour (Colours::black.withAlpha (0.40f));
+        g.fillRoundedRectangle (rf.translated (0.0f, 3.0f).expanded (1.0f), 10.0f);
+        ColourGradient pg (lnf.panelHi, rf.getX(), rf.getY(), lnf.panel.darker (0.28f), rf.getX(), rf.getBottom(), false);
+        g.setGradientFill (pg);
+        g.fillRoundedRectangle (rf, 9.0f);
+        g.setColour (Colours::white.withAlpha (0.06f));
+        g.drawLine (rf.getX() + 8.0f, rf.getY() + 2.0f, rf.getRight() - 8.0f, rf.getY() + 2.0f, 1.0f);
         g.setColour (lnf.line);
-        g.drawRoundedRectangle (r.toFloat(), 8.0f, 1.2f);
+        g.drawRoundedRectangle (rf, 9.0f, 1.3f);
         g.setColour (lnf.accent);
-        g.setFont (Font (12.0f, Font::bold));
-        g.drawText (title, r.getX() + 12, r.getY() + 6, r.getWidth() - 24, 16, Justification::left);
-        g.setColour (lnf.accent.withAlpha (0.30f));
-        g.fillRect ((float) r.getX() + 12.0f, (float) r.getY() + 24.0f, (float) r.getWidth() - 24.0f, 1.0f);
+        g.fillRoundedRectangle ((float) r.getX() + 14.0f, (float) r.getY() + 11.0f, 4.0f, 13.0f, 1.5f);
+        g.setColour (lnf.text);
+        g.setFont (Font (12.5f, Font::bold));
+        g.drawText (title, r.getX() + 24, r.getY() + 8, r.getWidth() - 34, 16, Justification::left);
+        ApexLookAndFeel::drawScrew (g, (float) r.getX() + 11.0f,     (float) r.getY() + 11.0f, 4.0f);
+        ApexLookAndFeel::drawScrew (g, (float) r.getRight() - 11.0f, (float) r.getY() + 11.0f, 4.0f);
     };
 
-    // header bar
-    g.setColour (lnf.panel);
-    g.fillRoundedRectangle (rcHeader.toFloat(), 8.0f);
-    g.setColour (lnf.line);
-    g.drawRoundedRectangle (rcHeader.toFloat(), 8.0f, 1.2f);
+    // ---- header: brushed metal bar with screws + branded wordmark ----
+    {
+        auto rf = rcHeader.toFloat();
+        g.setColour (Colours::black.withAlpha (0.40f));
+        g.fillRoundedRectangle (rf.translated (0.0f, 3.0f).expanded (1.0f), 10.0f);
+        ColourGradient hg (Colour (0xff343b46), rf.getX(), rf.getY(), Colour (0xff1c2027), rf.getX(), rf.getBottom(), false);
+        g.setGradientFill (hg);
+        g.fillRoundedRectangle (rf, 9.0f);
+        g.setColour (Colours::white.withAlpha (0.07f));
+        g.drawLine (rf.getX() + 8.0f, rf.getY() + 2.0f, rf.getRight() - 8.0f, rf.getY() + 2.0f, 1.0f);
+        g.setColour (lnf.line);
+        g.drawRoundedRectangle (rf, 9.0f, 1.3f);
 
-    g.setFont (Font (30.0f, Font::bold));
-    g.setColour (Colours::white);
-    g.drawText ("APEX", rcHeader.getX() + 16, rcHeader.getY() + 12, 86, 34, Justification::left);
-    g.setColour (lnf.accent);
-    g.drawText ("AMP", rcHeader.getX() + 100, rcHeader.getY() + 12, 80, 34, Justification::left);
-    g.setColour (Colours::white.withAlpha (0.35f));
-    g.setFont (Font (10.5f, Font::bold));
-    g.drawText ("HIGH-GAIN AMP", rcHeader.getX() + 17, rcHeader.getY() + 40, 160, 12, Justification::left);
+        ApexLookAndFeel::drawScrew (g, rf.getX() + 12.0f,     rf.getY() + 12.0f, 4.5f);
+        ApexLookAndFeel::drawScrew (g, rf.getRight() - 12.0f, rf.getY() + 12.0f, 4.5f);
+        ApexLookAndFeel::drawScrew (g, rf.getX() + 12.0f,     rf.getBottom() - 12.0f, 4.5f);
+        ApexLookAndFeel::drawScrew (g, rf.getRight() - 12.0f, rf.getBottom() - 12.0f, 4.5f);
 
-    // panels
+        const int lx = rcHeader.getX() + 22, ly = rcHeader.getY() + 10;
+        g.setFont (Font (31.0f, Font::bold));
+        g.setColour (Colours::white);
+        g.drawText ("APEX", lx, ly, 88, 34, Justification::left);
+        g.setColour (lnf.accent);
+        g.drawText ("AMP", lx + 92, ly, 86, 34, Justification::left);
+        g.setColour (lnf.accent);
+        g.fillRoundedRectangle ((float) lx + 1.0f, (float) ly + 35.0f, 168.0f, 2.0f, 1.0f);
+        g.setColour (Colours::white.withAlpha (0.35f));
+        g.setFont (Font (9.5f, Font::bold));
+        g.drawText ("HIGH-GAIN AMPLIFIER", lx + 1, ly + 39, 220, 12, Justification::left);
+    }
+
     drawPanel (rcPreamp, "PREAMP");
     drawPanel (rcTone,   "TONE");
     drawPanel (rcDyn,    "DYNAMICS");
@@ -253,10 +279,10 @@ void ApexAmpEditor::paint (juce::Graphics& g)
     drawPanel (rcOut,    "POWER / OUTPUT");
 
     // footer
-    g.setColour (Colours::white.withAlpha (0.3f));
+    g.setColour (Colours::white.withAlpha (0.28f));
     g.setFont (Font (11.0f));
-    g.drawText ("ApexAmp  v0.2 beta", 16, getHeight() - 24, 300, 16, Justification::left);
-    g.drawText ("PolychromeNext", getWidth() - 216, getHeight() - 24, 200, 16, Justification::right);
+    g.drawText ("ApexAmp  v0.2 beta", 18, getHeight() - 22, 300, 16, Justification::left);
+    g.drawText ("PolychromeNext", getWidth() - 216, getHeight() - 22, 200, 16, Justification::right);
 }
 
 void ApexAmpEditor::resized()
