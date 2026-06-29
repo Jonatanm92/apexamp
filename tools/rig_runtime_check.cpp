@@ -17,6 +17,7 @@ int main(){
     const char* files[3] = {
         "assets/rig_bite.nam", "assets/rig_body.nam", "assets/rig_edge.nam" };
     const double SR = 48000.0; const int N = 512;
+    constexpr double kPi = 3.14159265358979323846;
     int failures = 0;
 
     for (int r = 0; r < 3; ++r){
@@ -41,7 +42,7 @@ int main(){
             std::vector<double> in(N), out(N);
             for (int i = 0; i < N; ++i){
                 double t = (double)(b*N + i) / SR;
-                in[i] = 0.25 * std::sin(2.0*M_PI*110.0*t);
+                in[i] = 0.25 * std::sin(2.0*kPi*110.0*t);
             }
             double* ip[1] = { in.data() }; double* op[1] = { out.data() };
             dsp->process(ip, op, N);
