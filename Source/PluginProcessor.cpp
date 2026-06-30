@@ -9,7 +9,7 @@ namespace pid
     constexpr auto mixBite    = "mixBite";
     constexpr auto mixBody    = "mixBody";
     constexpr auto mixEdge    = "mixEdge";
-    constexpr auto cabOn      = "cabOn";
+    constexpr auto cabMix     = "cabMix";
     constexpr auto ir         = "ir";
     constexpr auto gateOn     = "gateOn";
     constexpr auto gate       = "gate";
@@ -52,7 +52,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::mixEdge, 1 }, "Blend: Edge",
         NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
 
-    layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::cabOn, 1 }, "Cab", true));
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::cabMix, 1 }, "Cab Mix",
+        NormalisableRange<float> (0.0f, 100.0f, 0.1f), 100.0f));
 
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { pid::ir, 1 }, "Cabinet IR",
@@ -84,7 +86,7 @@ NamEngine::Params ApexAmpProcessor::gatherParams()
     p.mix[0]       = get (pid::mixBite);
     p.mix[1]       = get (pid::mixBody);
     p.mix[2]       = get (pid::mixEdge);
-    p.irEnabled    = get (pid::cabOn) > 0.5f;
+    p.cabMix       = juce::jlimit (0.0f, 1.0f, get (pid::cabMix) * 0.01f);
     p.irIndex      = (int) get (pid::ir);
     p.gateEnabled  = get (pid::gateOn) > 0.5f;
     p.gateThreshDb = get (pid::gate);

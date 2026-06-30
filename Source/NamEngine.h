@@ -40,7 +40,7 @@ public:
         int     singleIndex  = 0;          // 0..2
         std::array<float, 3> mix { 1.0f, 1.0f, 1.0f }; // blend layer mixes 0..1
         int     irIndex      = 0;          // 0..2
-        bool    irEnabled    = true;
+        float   cabMix       = 1.0f;       // 0 = dry amp, 1 = full cab (smoothed)
         bool    gateEnabled  = false;
         float   gateThreshDb = -60.0f;     // open above this
         float   lowCutHz     = 80.0f;      // output high-pass to tame sub-bass
@@ -80,6 +80,12 @@ public:
         lowCut.setType (juce::dsp::StateVariableTPTFilterType::highpass);
         lowCut.setResonance (0.707f);
         lowCut.setCutoffFrequency (80.0f);
+
+        // Dry/wet crossfade state for the cab.
+        dryScratch.assign ((size_t) juce::jmax (1, numChannels),
+                           std::vector<float> ((size_t) maxBlockSize, 0.0f));
+        cabMixSmoothed.reset (sampleRate, 0.02); // 20 ms ramp = click-free
+        cabMixSmoothed.setCurrentAndTargetValue (1.0f);
 
         // Gate state
         gateGain = 1.0f;
@@ -181,19 +187,38 @@ public:
                 w[i] = (float) mixBuf[(size_t) i];
         }
 
-        // ---- 4) Cabinet IR convolution -----------------------------------------
-        if (p.irEnabled)
+        // ---- 4) Cabinet IR convolution with smooth dry/wet blend ---------------
+        // The convolver always runs (cheap for short IRs); we crossfade dry amp
+        // vs cabbed signal with a smoothed Cab Mix so changing the cab amount
+        // never clicks or jumps in level ("cab status weirdness").
         {
             const int idx = juce::jlimit (0, 2, p.irIndex);
-            juce::dsp::AudioBlock<float>          block (buffer);
-            juce::dsp::ProcessContextReplacing<float> ctx (block);
-            convolvers[(size_t) idx].process (ctx);
 
-            // A real cabinet IR rolls off most of the fizz/sub energy, so the
-            // convolved signal is much quieter than the dry amp. Apply the
-            // pre-measured broadband makeup so toggling the cab no longer
-            // causes a big level jump ("double cab" feel).
+            // Stash the dry (pre-cab) amp signal.
+            for (int ch = 0; ch < numChannels; ++ch)
+                std::copy (buffer.getReadPointer (ch),
+                           buffer.getReadPointer (ch) + n,
+                           dryScratch[(size_t) ch].data());
+
+            // wet = makeup * cab(buffer)
+            {
+                juce::dsp::AudioBlock<float>              block (buffer);
+                juce::dsp::ProcessContextReplacing<float> ctx (block);
+                convolvers[(size_t) idx].process (ctx);
+            }
             buffer.applyGain (cabMakeup[(size_t) idx]);
+
+            // Smoothed crossfade: out = dry*(1-m) + wet*m.
+            cabMixSmoothed.setTargetValue (juce::jlimit (0.0f, 1.0f, p.cabMix));
+            for (int i = 0; i < n; ++i)
+            {
+                const float m = cabMixSmoothed.getNextValue();
+                for (int ch = 0; ch < numChannels; ++ch)
+                {
+                    auto* w = buffer.getWritePointer (ch);
+                    w[i] = dryScratch[(size_t) ch][(size_t) i] * (1.0f - m) + w[i] * m;
+                }
+            }
         }
 
         // ---- 5) Output low-cut (high-pass) -------------------------------------
@@ -384,6 +409,9 @@ private:
     std::array<float, 3> cabMakeup { 1.0f, 1.0f, 1.0f }; // level-match cab on/off
 
     juce::dsp::StateVariableTPTFilter<float> lowCut;     // output sub-bass high-pass
+
+    std::vector<std::vector<float>> dryScratch;          // pre-cab signal for blend
+    juce::SmoothedValue<float> cabMixSmoothed;           // click-free cab dry/wet
 
     std::vector<double> monoIn, rigOut, mixBuf;
 
