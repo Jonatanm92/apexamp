@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "ApexEditor.h"
 
 namespace pid
 {
@@ -131,12 +132,26 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     for (int ch = totalIn; ch < totalOut; ++ch)
         buffer.clear (ch, 0, buffer.getNumSamples());
 
+    const int n = buffer.getNumSamples();
+
+    // Input level (pre-engine).
+    float inMag = 0.0f;
+    for (int ch = 0; ch < juce::jmin (totalIn, buffer.getNumChannels()); ++ch)
+        inMag = juce::jmax (inMag, buffer.getMagnitude (ch, 0, n));
+    inputMagnitude.store (inMag);
+
     engine.process (buffer, gatherParams());
+
+    // Output level (post-engine).
+    float outMag = 0.0f;
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+        outMag = juce::jmax (outMag, buffer.getMagnitude (ch, 0, n));
+    outputMagnitude.store (outMag);
 }
 
 juce::AudioProcessorEditor* ApexAmpProcessor::createEditor()
 {
-    return new juce::GenericAudioProcessorEditor (*this);
+    return new ApexAmpEditor (*this);
 }
 
 void ApexAmpProcessor::getStateInformation (juce::MemoryBlock& destData)

@@ -66,7 +66,8 @@ target_include_directories(nam_core PUBLIC
 set_target_properties(nam_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_sources(ApexAmp PRIVATE
-    Source/PluginProcessor.cpp)
+    Source/PluginProcessor.cpp
+    Source/ApexEditor.cpp)
 
 target_include_directories(ApexAmp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source)

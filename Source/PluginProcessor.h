@@ -35,6 +35,10 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
+    // Live metering for the editor (peak magnitude per block, linear 0..1+).
+    std::atomic<float> inputMagnitude  { 0.0f };
+    std::atomic<float> outputMagnitude { 0.0f };
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     NamEngine::Params gatherParams();
