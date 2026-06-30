@@ -43,7 +43,9 @@ public:
         float   cabMix       = 1.0f;       // 0 = dry amp, 1 = full cab (smoothed)
         bool    gateEnabled  = false;
         float   gateThreshDb = -60.0f;     // open above this
+        float   gateHoldMs   = 50.0f;      // hold open after last transient
         float   lowCutHz     = 80.0f;      // output high-pass to tame sub-bass
+        float   presenceDb   = 0.0f;       // high shelf post-cab (-12..+12 dB)
     };
 
     NamEngine() = default;
@@ -81,6 +83,11 @@ public:
         lowCut.setResonance (0.707f);
         lowCut.setCutoffFrequency (80.0f);
 
+        // Presence: high-shelf at 3.5 kHz, lets you add/cut brightness
+        // through the cab without going fully dry.
+        presenceFilter.prepare (spec);
+        updatePresenceCoeffs (0.0f);
+
         // Dry/wet crossfade state for the cab.
         dryScratch.assign ((size_t) juce::jmax (1, numChannels),
                            std::vector<float> ((size_t) maxBlockSize, 0.0f));
@@ -101,7 +108,10 @@ public:
         for (auto& c : convolvers)
             c.reset();
         lowCut.reset();
+        presenceFilter.reset();
         gateGain = 1.0f;
+        gateOpen = true;
+        gateHoldCounter = 0;
     }
 
     //==============================================================================
@@ -122,8 +132,10 @@ public:
 
         // ---- 1) Sum to mono double, apply input gain + optional gate -----------
         const float gateThresh = juce::Decibels::decibelsToGain (p.gateThreshDb);
-        const float gateAtk = std::exp (-1.0f / (0.002f * (float) sampleRate)); // 2 ms
-        const float gateRel = std::exp (-1.0f / (0.080f * (float) sampleRate)); // 80 ms
+        const float gateClose = gateThresh * 0.5f; // hysteresis: closes 6 dB below open
+        const float gateAtk  = std::exp (-1.0f / (0.0005f * (float) sampleRate)); // 0.5 ms attack (fast open)
+        const float gateRel  = std::exp (-1.0f / (0.050f * (float) sampleRate));  // 50 ms release (smooth close)
+        const int   holdSamp = (int) (p.gateHoldMs * 0.001f * (float) sampleRate);
 
         for (int i = 0; i < n; ++i)
         {
@@ -135,8 +147,23 @@ public:
 
             if (p.gateEnabled)
             {
-                const float target = (std::abs ((float) sum) > gateThresh) ? 1.0f : 0.0f;
-                const float coef   = (target < gateGain) ? gateRel : gateAtk;
+                const float level = std::abs ((float) sum);
+                // Hysteresis: open at threshold, close at threshold-6dB
+                if (level > gateThresh)
+                {
+                    gateOpen = true;
+                    gateHoldCounter = holdSamp;
+                }
+                else if (level < gateClose && gateHoldCounter <= 0)
+                {
+                    gateOpen = false;
+                }
+
+                if (gateHoldCounter > 0)
+                    --gateHoldCounter;
+
+                const float target = gateOpen ? 1.0f : 0.0f;
+                const float coef   = (target > gateGain) ? gateAtk : gateRel;
                 gateGain = target + coef * (gateGain - target);
                 sum *= (double) gateGain;
             }
@@ -221,7 +248,16 @@ public:
             }
         }
 
-        // ---- 5) Output low-cut (high-pass) -------------------------------------
+        // ---- 5) Presence shelf (post-cab brightness control) --------------------
+        if (std::abs (p.presenceDb) > 0.05f)
+        {
+            updatePresenceCoeffs (p.presenceDb);
+            juce::dsp::AudioBlock<float>          block (buffer);
+            juce::dsp::ProcessContextReplacing<float> ctx (block);
+            presenceFilter.process (ctx);
+        }
+
+        // ---- 6) Output low-cut (high-pass) -------------------------------------
         lowCut.setCutoffFrequency (juce::jlimit (20.0f, 300.0f, p.lowCutHz));
         {
             juce::dsp::AudioBlock<float>          block (buffer);
@@ -229,7 +265,7 @@ public:
             lowCut.process (ctx);
         }
 
-        // ---- 6) Output gain -----------------------------------------------------
+        // ---- 7) Output gain -----------------------------------------------------
         buffer.applyGain ((float) outGain);
     }
 
@@ -410,10 +446,28 @@ private:
 
     juce::dsp::StateVariableTPTFilter<float> lowCut;     // output sub-bass high-pass
 
+    // Presence: high-shelf EQ post-cab for brightness control.
+    juce::dsp::ProcessorDuplicator<juce::dsp::IIR::Filter<float>,
+                                   juce::dsp::IIR::Coefficients<float>> presenceFilter;
+    float lastPresenceDb = 0.0f;
+
+    void updatePresenceCoeffs (float db)
+    {
+        if (std::abs (db - lastPresenceDb) < 0.01f)
+            return;
+        lastPresenceDb = db;
+        auto coeffs = juce::dsp::IIR::Coefficients<float>::makeHighShelf (
+            sampleRate, 3500.0f, 0.707f,
+            juce::Decibels::decibelsToGain (db));
+        *presenceFilter.state = *coeffs;
+    }
+
     std::vector<std::vector<float>> dryScratch;          // pre-cab signal for blend
     juce::SmoothedValue<float> cabMixSmoothed;           // click-free cab dry/wet
 
     std::vector<double> monoIn, rigOut, mixBuf;
 
     float gateGain = 1.0f;
+    bool  gateOpen = true;
+    int   gateHoldCounter = 0;
 };
