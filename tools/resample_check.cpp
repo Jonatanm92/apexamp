@@ -47,6 +47,7 @@ int main()
     std::uniform_int_distribution<int> blk (16, 1024);
 
     const double freq = 220.0;
+    constexpr double kPi = 3.14159265358979323846;
     long produced = 0, fed = 0;
     double sumIn = 0.0, sumOut = 0.0, sumErrLag = 0.0;
     bool finite = true;
@@ -58,7 +59,7 @@ int main()
         const int n = blk (rng);
         std::vector<float> in ((size_t) n);
         for (int i = 0; i < n; ++i)
-            in[(size_t) i] = (float) std::sin (2.0 * M_PI * freq * (double) (phase + i) / hostRate);
+            in[(size_t) i] = (float) std::sin (2.0 * kPi * freq * (double) (phase + i) / hostRate);
         phase += n;
         fed += n;
 
