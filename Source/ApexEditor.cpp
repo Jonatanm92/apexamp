@@ -1,4 +1,5 @@
 #include "ApexEditor.h"
+#include "Presets.h"
 
 //==============================================================================
 const juce::Colour ApexLookAndFeel::accent   { 0xffff7a18 }; // molten amber
@@ -143,16 +144,17 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
 {
     setLookAndFeel (&lnf);
 
-    inputGain  = &addKnob ("inputGain",  "INPUT",     " dB", 1);
-    gateThresh = &addKnob ("gate",       "THRESH",    " dB", 0);
-    gateHold   = &addKnob ("gateHold",   "HOLD",      " ms", 0);
-    mixBite    = &addKnob ("mixBite",    "BITE",      "",    2);
-    mixBody    = &addKnob ("mixBody",    "BODY",      "",    2);
-    mixEdge    = &addKnob ("mixEdge",    "EDGE",      "",    2);
-    cabMix     = &addKnob ("cabMix",     "CAB MIX",   " %",  0);
-    presence   = &addKnob ("presence",   "PRESENCE",  " dB", 1);
-    lowCut     = &addKnob ("lowCut",     "LOW CUT",   " Hz", 0);
-    outputGain = &addKnob ("outputGain", "OUTPUT",    " dB", 1);
+    inputGain  = &addKnob ("inputGain",  "INPUT",     " dB", 1, "Drive into the amp capture");
+    tight      = &addKnob ("tight",      "TIGHT",     " Hz", 0, "Pre-amp high-pass: tightens low end before the amp (20 = off)");
+    gateThresh = &addKnob ("gate",       "THRESH",    " dB", 0, "Noise gate threshold");
+    gateHold   = &addKnob ("gateHold",   "HOLD",      " ms", 0, "How long the gate stays open after the last transient");
+    mixBite    = &addKnob ("mixBite",    "BITE",      "",    2, "Blend amount of the Bite rig (Blend mode)");
+    mixBody    = &addKnob ("mixBody",    "BODY",      "",    2, "Blend amount of the Body rig (Blend mode)");
+    mixEdge    = &addKnob ("mixEdge",    "EDGE",      "",    2, "Blend amount of the Edge rig (Blend mode)");
+    cabMix     = &addKnob ("cabMix",     "CAB MIX",   " %",  0, "Dry amp vs cabinet IR blend");
+    presence   = &addKnob ("presence",   "PRESENCE",  " dB", 1, "High-shelf brightness after the cab (3.5 kHz)");
+    lowCut     = &addKnob ("lowCut",     "LOW CUT",   " Hz", 0, "Output high-pass to remove sub-bass rumble");
+    outputGain = &addKnob ("outputGain", "OUTPUT",    " dB", 1, "Master output level");
 
     auto setupCombo = [this] (juce::ComboBox& box, juce::Label& label, const juce::String& title,
                               const juce::StringArray& items, const juce::String& paramID,
@@ -176,10 +178,43 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
 
     addAndMakeVisible (gateButton);
     gateButton.setClickingTogglesState (true);
+    gateButton.setTooltip ("Enable the input noise gate");
     gateAtt = std::make_unique<BA> (proc.apvts, "gateOn", gateButton);
 
-    setSize (960, 560);
+    // ----- Preset bar -----
+    for (int i = 0; i < (int) ApexPresets::all().size(); ++i)
+        presetBox.addItem (ApexPresets::all()[(size_t) i].name, i + 1);
+    presetBox.setSelectedId (1, juce::dontSendNotification);
+    presetBox.setTooltip ("Factory presets");
+    presetBox.onChange = [this] { applyPreset (presetBox.getSelectedId() - 1); };
+    addAndMakeVisible (presetBox);
+
+    prevPresetButton.setTooltip ("Previous preset");
+    nextPresetButton.setTooltip ("Next preset");
+    prevPresetButton.onClick = [this]
+    {
+        const int n = (int) ApexPresets::all().size();
+        int id = presetBox.getSelectedId() - 1; // 0-based
+        id = (id - 1 + n) % n;
+        presetBox.setSelectedId (id + 1); // triggers onChange
+    };
+    nextPresetButton.onClick = [this]
+    {
+        const int n = (int) ApexPresets::all().size();
+        int id = presetBox.getSelectedId() - 1;
+        id = (id + 1) % n;
+        presetBox.setSelectedId (id + 1);
+    };
+    addAndMakeVisible (prevPresetButton);
+    addAndMakeVisible (nextPresetButton);
+
+    setSize (1000, 560);
     startTimerHz (30);
+}
+
+void ApexAmpEditor::applyPreset (int index)
+{
+    ApexPresets::apply (proc.apvts, index);
 }
 
 ApexAmpEditor::~ApexAmpEditor()
@@ -188,7 +223,8 @@ ApexAmpEditor::~ApexAmpEditor()
 }
 
 ApexAmpEditor::Knob& ApexAmpEditor::addKnob (const juce::String& paramID, const juce::String& name,
-                                             const juce::String& suffix, int decimals)
+                                             const juce::String& suffix, int decimals,
+                                             const juce::String& tooltip)
 {
     auto* k = new Knob();
     knobs.add (k);
@@ -199,6 +235,8 @@ ApexAmpEditor::Knob& ApexAmpEditor::addKnob (const juce::String& paramID, const 
     if (suffix.isNotEmpty())
         k->slider.setTextValueSuffix (suffix);
     k->slider.setNumDecimalPlacesToDisplay (decimals);
+    if (tooltip.isNotEmpty())
+        k->slider.setTooltip (tooltip);
     addAndMakeVisible (k->slider);
 
     k->nameLabel.setText (name, juce::dontSendNotification);
@@ -299,11 +337,22 @@ void ApexAmpEditor::paint (juce::Graphics& g)
 //==============================================================================
 void ApexAmpEditor::resized()
 {
-    auto area = getLocalBounds().reduced (16);
-    area.removeFromTop (72 + 12); // header + gap
+    auto full = getLocalBounds().reduced (16);
+    headerArea = full.removeFromTop (72);
+    full.removeFromTop (12);
+
+    // preset bar on the right of the header
+    {
+        auto bar = headerArea.removeFromRight (380).reduced (14, 19); // 34 px tall
+        prevPresetButton.setBounds (bar.removeFromLeft (34));
+        bar.removeFromLeft (6);
+        nextPresetButton.setBounds (bar.removeFromRight (34));
+        bar.removeFromRight (6);
+        presetBox.setBounds (bar);
+    }
 
     const int gap = 12;
-    auto row = area;
+    auto row = full;
 
     inputPanel = row.removeFromLeft (180); row.removeFromLeft (gap);
     rigPanel   = row.removeFromLeft (300); row.removeFromLeft (gap);
@@ -318,13 +367,15 @@ void ApexAmpEditor::resized()
 
     // ----- INPUT / GATE panel -----
     {
-        auto p = inputPanel.reduced (14, 14);
+        auto p = inputPanel.reduced (12, 14);
         p.removeFromTop (22); // title
-        placeKnob (*inputGain, p.removeFromTop (132));
+        auto topRow = p.removeFromTop (118);
+        placeKnob (*inputGain, topRow.removeFromLeft (topRow.getWidth() / 2).reduced (2, 0));
+        placeKnob (*tight,     topRow.reduced (2, 0));
+        p.removeFromTop (4);
+        gateButton.setBounds (p.removeFromTop (28).reduced (2, 0));
         p.removeFromTop (6);
-        gateButton.setBounds (p.removeFromTop (30));
-        p.removeFromTop (6);
-        auto g2 = p.removeFromTop (110);
+        auto g2 = p.removeFromTop (118);
         placeKnob (*gateThresh, g2.removeFromLeft (g2.getWidth() / 2).reduced (2, 0));
         placeKnob (*gateHold,   g2.reduced (2, 0));
     }

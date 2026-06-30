@@ -5,6 +5,7 @@ namespace pid
 {
     constexpr auto inputGain  = "inputGain";
     constexpr auto outputGain = "outputGain";
+    constexpr auto tight      = "tight";
     constexpr auto rigMode    = "rigMode";
     constexpr auto rig        = "rig";
     constexpr auto mixBite    = "mixBite";
@@ -39,6 +40,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { pid::outputGain, 1 }, "Output Gain",
         NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f));
+
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::tight, 1 }, "Tight",
+        NormalisableRange<float> (20.0f, 300.0f, 1.0f, 0.5f), 20.0f));
 
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { pid::rigMode, 1 }, "Rig Mode",
@@ -91,6 +96,7 @@ NamEngine::Params ApexAmpProcessor::gatherParams()
 
     p.inputGainDb  = get (pid::inputGain);
     p.outputGainDb = get (pid::outputGain);
+    p.tightHz      = get (pid::tight);
     p.rigMode      = ((int) get (pid::rigMode) == 1) ? NamEngine::RigMode::Blend
                                                      : NamEngine::RigMode::Single;
     p.singleIndex  = (int) get (pid::rig);

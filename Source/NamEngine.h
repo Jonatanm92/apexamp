@@ -36,6 +36,7 @@ public:
     {
         float   inputGainDb  = 0.0f;
         float   outputGainDb = 0.0f;
+        float   tightHz      = 20.0f;      // pre-amp high-pass (20 = off)
         RigMode rigMode      = RigMode::Single;
         int     singleIndex  = 0;          // 0..2
         std::array<float, 3> mix { 1.0f, 1.0f, 1.0f }; // blend layer mixes 0..1
@@ -94,8 +95,11 @@ public:
         cabMixSmoothed.reset (sampleRate, 0.02); // 20 ms ramp = click-free
         cabMixSmoothed.setCurrentAndTargetValue (1.0f);
 
-        // Gate state
+        // Gate / filter state
         gateGain = 1.0f;
+        gateOpen = true;
+        gateHoldCounter = 0;
+        tightLp1 = tightLp2 = 0.0;
 
         prepared = true;
     }
@@ -112,6 +116,7 @@ public:
         gateGain = 1.0f;
         gateOpen = true;
         gateHoldCounter = 0;
+        tightLp1 = tightLp2 = 0.0;
     }
 
     //==============================================================================
@@ -137,6 +142,12 @@ public:
         const float gateRel  = std::exp (-1.0f / (0.050f * (float) sampleRate));  // 50 ms release (smooth close)
         const int   holdSamp = (int) (p.gateHoldMs * 0.001f * (float) sampleRate);
 
+        // Tightness: cascaded one-pole high-pass on the DI feeding the amp.
+        const bool   tightOn    = p.tightHz > 21.0f;
+        const double tightAlpha = tightOn
+            ? 1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi * (double) p.tightHz / sampleRate)
+            : 0.0;
+
         for (int i = 0; i < n; ++i)
         {
             double sum = 0.0;
@@ -144,6 +155,14 @@ public:
                 sum += (double) buffer.getReadPointer (ch)[i];
             sum /= (double) numChannels;
             sum *= inGain;
+
+            if (tightOn)
+            {
+                tightLp1 += tightAlpha * (sum - tightLp1);
+                const double h1 = sum - tightLp1;
+                tightLp2 += tightAlpha * (h1 - tightLp2);
+                sum = h1 - tightLp2;
+            }
 
             if (p.gateEnabled)
             {
@@ -470,4 +489,6 @@ private:
     float gateGain = 1.0f;
     bool  gateOpen = true;
     int   gateHoldCounter = 0;
+
+    double tightLp1 = 0.0, tightLp2 = 0.0; // pre-amp high-pass state
 };

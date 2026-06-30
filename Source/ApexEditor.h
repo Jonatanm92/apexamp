@@ -62,7 +62,10 @@ private:
     };
 
     Knob& addKnob (const juce::String& paramID, const juce::String& name,
-                   const juce::String& suffix, int decimals);
+                   const juce::String& suffix, int decimals,
+                   const juce::String& tooltip = {});
+
+    void applyPreset (int index);
 
     void drawPanel  (juce::Graphics&, juce::Rectangle<int>, const juce::String& title);
     void drawMeter  (juce::Graphics&, juce::Rectangle<int>, float level01, const juce::String& label);
@@ -70,9 +73,11 @@ private:
 
     ApexAmpProcessor& proc;
     ApexLookAndFeel lnf;
+    juce::TooltipWindow tooltipWindow { this, 600 };
 
     juce::OwnedArray<Knob> knobs;
     Knob* inputGain  = nullptr;
+    Knob* tight      = nullptr;
     Knob* gateThresh = nullptr;
     Knob* gateHold   = nullptr;
     Knob* mixBite    = nullptr;
@@ -91,8 +96,12 @@ private:
     juce::ToggleButton gateButton { "GATE" };
     std::unique_ptr<BA> gateAtt;
 
+    // preset bar
+    juce::ComboBox  presetBox;
+    juce::TextButton prevPresetButton { "<" }, nextPresetButton { ">" };
+
     // cached panel rects (set in resized(), used in paint())
-    juce::Rectangle<int> inputPanel, rigPanel, cabPanel, outPanel;
+    juce::Rectangle<int> headerArea, inputPanel, rigPanel, cabPanel, outPanel;
 
     // smoothed meter values
     float inMeter = 0.0f, outMeter = 0.0f;

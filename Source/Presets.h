@@ -2,77 +2,84 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <vector>
-#include <utility>
 
-namespace apexpresets
-{
 /**
-    A factory preset = a name plus a list of (parameterID, real value) pairs.
-    Values are in each parameter's natural units (e.g. gain 0..1, master in dB,
-    channel/tonestack as the choice index). They are applied by converting to the
-    parameter's normalised range, so automation/host stay in sync.
-
-    Presets are tuned as *starting points* in the spirit of the reference tones —
-    they are original settings, not copies of anyone's product.
-*/
-struct Preset
+ * Factory presets for ApexAmp.
+ *
+ * Each preset is a list of (parameterID, real-world value) pairs. Values are
+ * in the parameter's natural units (dB, Hz, %, choice index, 0/1) and applied
+ * via the parameter's own range, so they stay correct if ranges change.
+ *
+ * rigMode: 0 = Single, 1 = Blend
+ * rig:     0 = Bite, 1 = Body, 2 = Edge
+ * ir:      0 = Ashen, 1 = Meshuggah, 2 = PDI-09
+ */
+namespace ApexPresets
 {
-    juce::String name;
-    std::vector<std::pair<juce::String, float>> values;
-};
-
-inline std::vector<Preset> factory()
-{
-    return {
-        { "Init", {
-            { "channel", 0 }, { "tonestack", 0 }, { "inputTrim", 0.0f },
-            { "gain", 0.5f }, { "push", 0.0f }, { "tight", 0.3f }, { "superCut", 0.0f }, { "bias", 0.02f },
-            { "bass", 0.5f }, { "mid", 0.5f }, { "treble", 0.5f },
-            { "chug", 0.0f }, { "lowDirtDrive", 0.0f }, { "lowDirtMix", 0.0f },
-            { "sag", 0.3f }, { "powerDrive", 0.3f }, { "gate", -60.0f }, { "cabOn", 1.0f }, { "cabType", 0 }, { "master", -3.0f }
-        }},
-        { "Chug Machine", {
-            { "channel", 1 }, { "tonestack", 3 }, { "inputTrim", 0.0f },
-            { "gain", 0.8f }, { "push", 0.5f }, { "tight", 0.78f }, { "superCut", 0.55f }, { "bias", 0.02f },
-            { "bass", 0.4f }, { "mid", 0.45f }, { "treble", 0.62f },
-            { "chug", 0.55f }, { "lowDirtDrive", 0.45f }, { "lowDirtMix", 0.28f },
-            { "sag", 0.4f }, { "powerDrive", 0.5f }, { "gate", -42.0f }, { "cabOn", 1.0f }, { "cabType", 2 }, { "master", -3.0f }
-        }},
-        { "Djent Tight", {
-            { "channel", 1 }, { "tonestack", 3 }, { "inputTrim", 0.0f },
-            { "gain", 0.75f }, { "push", 0.45f }, { "tight", 0.88f }, { "superCut", 0.6f }, { "bias", 0.0f },
-            { "bass", 0.35f }, { "mid", 0.4f }, { "treble", 0.66f },
-            { "chug", 0.6f }, { "lowDirtDrive", 0.5f }, { "lowDirtMix", 0.3f },
-            { "sag", 0.35f }, { "powerDrive", 0.5f }, { "gate", -38.0f }, { "cabOn", 1.0f }, { "cabType", 2 }, { "master", -3.0f }
-        }},
-        { "Modern Lead", {
-            { "channel", 1 }, { "tonestack", 2 }, { "inputTrim", 0.0f },
-            { "gain", 0.88f }, { "push", 0.6f }, { "tight", 0.5f }, { "superCut", 0.4f }, { "bias", 0.03f },
-            { "bass", 0.45f }, { "mid", 0.6f }, { "treble", 0.62f },
-            { "chug", 0.3f }, { "lowDirtDrive", 0.2f }, { "lowDirtMix", 0.15f },
-            { "sag", 0.55f }, { "powerDrive", 0.6f }, { "gate", -52.0f }, { "cabOn", 1.0f }, { "cabType", 0 }, { "master", -3.0f }
-        }},
-        { "Tight Rhythm (Marshall)", {
-            { "channel", 0 }, { "tonestack", 0 }, { "inputTrim", 0.0f },
-            { "gain", 0.62f }, { "push", 0.25f }, { "tight", 0.6f }, { "superCut", 0.0f }, { "bias", 0.02f },
-            { "bass", 0.5f }, { "mid", 0.62f }, { "treble", 0.55f },
-            { "chug", 0.35f }, { "lowDirtDrive", 0.0f }, { "lowDirtMix", 0.0f },
-            { "sag", 0.35f }, { "powerDrive", 0.45f }, { "gate", -46.0f }, { "cabOn", 1.0f }, { "cabType", 1 }, { "master", -3.0f }
-        }},
-        { "Clean (Fender)", {
-            { "channel", 0 }, { "tonestack", 1 }, { "inputTrim", 0.0f },
-            { "gain", 0.2f }, { "push", 0.0f }, { "tight", 0.25f }, { "superCut", 0.0f }, { "bias", 0.02f },
-            { "bass", 0.6f }, { "mid", 0.5f }, { "treble", 0.6f },
-            { "chug", 0.0f }, { "lowDirtDrive", 0.0f }, { "lowDirtMix", 0.0f },
-            { "sag", 0.2f }, { "powerDrive", 0.2f }, { "gate", -68.0f }, { "cabOn", 1.0f }, { "cabType", 3 }, { "master", -3.0f }
-        }},
+    struct Preset
+    {
+        juce::String name;
+        std::vector<std::pair<juce::String, float>> values;
     };
-}
 
-inline void apply (juce::AudioProcessorValueTreeState& apvts, const Preset& preset)
-{
-    for (const auto& [id, value] : preset.values)
-        if (auto* param = apvts.getParameter (id))
-            param->setValueNotifyingHost (param->convertTo0to1 (value));
+    inline const std::vector<Preset>& all()
+    {
+        static const std::vector<Preset> presets = {
+            { "Init / Flat", {
+                { "inputGain", 0.0f }, { "outputGain", 0.0f }, { "tight", 20.0f },
+                { "rigMode", 0 }, { "rig", 0 },
+                { "mixBite", 1.0f }, { "mixBody", 1.0f }, { "mixEdge", 1.0f },
+                { "cabMix", 100.0f }, { "ir", 0 }, { "presence", 0.0f }, { "lowCut", 80.0f },
+                { "gateOn", 0 }, { "gate", -60.0f }, { "gateHold", 50.0f } } },
+
+            { "Tight Rhythm", {
+                { "inputGain", 0.0f }, { "outputGain", 0.0f }, { "tight", 110.0f },
+                { "rigMode", 0 }, { "rig", 0 },
+                { "cabMix", 100.0f }, { "ir", 0 }, { "presence", 2.0f }, { "lowCut", 90.0f },
+                { "gateOn", 1 }, { "gate", -52.0f }, { "gateHold", 40.0f } } },
+
+            { "Djent Chug", {
+                { "inputGain", 0.0f }, { "outputGain", 0.0f }, { "tight", 140.0f },
+                { "rigMode", 0 }, { "rig", 2 },
+                { "cabMix", 100.0f }, { "ir", 1 }, { "presence", 1.0f }, { "lowCut", 95.0f },
+                { "gateOn", 1 }, { "gate", -50.0f }, { "gateHold", 35.0f } } },
+
+            { "Modern Lead", {
+                { "inputGain", 1.0f }, { "outputGain", 1.0f }, { "tight", 40.0f },
+                { "rigMode", 0 }, { "rig", 2 },
+                { "cabMix", 90.0f }, { "ir", 2 }, { "presence", 4.0f }, { "lowCut", 70.0f },
+                { "gateOn", 0 }, { "gate", -60.0f }, { "gateHold", 50.0f } } },
+
+            { "Wall (Blend)", {
+                { "inputGain", 0.0f }, { "outputGain", 0.0f }, { "tight", 30.0f },
+                { "rigMode", 1 },
+                { "mixBite", 1.0f }, { "mixBody", 0.8f }, { "mixEdge", 0.7f },
+                { "cabMix", 100.0f }, { "ir", 0 }, { "presence", -1.0f }, { "lowCut", 60.0f },
+                { "gateOn", 1 }, { "gate", -55.0f }, { "gateHold", 60.0f } } },
+
+            { "Bright Cut", {
+                { "inputGain", 0.0f }, { "outputGain", 0.0f }, { "tight", 90.0f },
+                { "rigMode", 0 }, { "rig", 0 },
+                { "cabMix", 85.0f }, { "ir", 2 }, { "presence", 6.0f }, { "lowCut", 85.0f },
+                { "gateOn", 1 }, { "gate", -52.0f }, { "gateHold", 45.0f } } },
+
+            { "Raw (No Cab)", {
+                { "inputGain", 0.0f }, { "outputGain", 0.0f }, { "tight", 20.0f },
+                { "rigMode", 0 }, { "rig", 0 },
+                { "cabMix", 0.0f }, { "presence", 0.0f }, { "lowCut", 75.0f },
+                { "gateOn", 0 }, { "gate", -60.0f }, { "gateHold", 50.0f } } },
+        };
+        return presets;
+    }
+
+    inline void apply (juce::AudioProcessorValueTreeState& apvts, int index)
+    {
+        const auto& list = all();
+        if (! juce::isPositiveAndBelow (index, (int) list.size()))
+            return;
+
+        for (const auto& [id, value] : list[(size_t) index].values)
+            if (auto* p = apvts.getParameter (id))
+                p->setValueNotifyingHost (p->convertTo0to1 (value));
+    }
 }
-} // namespace apexpresets
