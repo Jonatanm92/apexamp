@@ -1,9 +1,12 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_dsp/juce_dsp.h>
 
 #include <array>
+#include <atomic>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -105,6 +108,18 @@ public:
         spec.numChannels      = (juce::uint32) juce::jmax (1, numChannels);
 
         loadConvolvers (spec);
+        lastSpec = spec;
+
+        // User cabinet IR slot (loaded on demand from a file).
+        userConvolver.prepare (spec);
+        if (userIrFile.existsAsFile())
+            loadUserIr (userIrFile);
+
+        // User NAM rig slot: re-Reset existing, or (re)load from file.
+        if (userRig)
+            userRig->Reset (namRate, namMaxBlock);
+        else if (userRigFile.existsAsFile())
+            loadUserRig (userRigFile);
 
         // Output low-cut (high-pass) to remove the sub-bass rumble a cranked
         // high-gain amp produces. Default ~80 Hz keeps weight without flub.
@@ -140,6 +155,12 @@ public:
                 rig->Reset (namRate, namMaxBlock);
         for (auto& c : convolvers)
             c.reset();
+        userConvolver.reset();
+        {
+            const juce::SpinLock::ScopedLockType sl (userRigLock);
+            if (userRig)
+                userRig->Reset (namRate, namMaxBlock);
+        }
         lowCut.reset();
         presenceFilter.reset();
         srcUp.reset();
@@ -153,6 +174,83 @@ public:
     }
 
     int getLatencySamples() const noexcept { return latencySamples; }
+
+    //==============================================================================
+    // Load a user cabinet IR from a file (message thread). Returns true on success.
+    bool loadUserIr (const juce::File& file)
+    {
+        if (! file.existsAsFile())
+            return false;
+
+        juce::AudioFormatManager fm;
+        fm.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> reader (fm.createReaderFor (file));
+        if (reader == nullptr || reader->lengthInSamples <= 0)
+            return false;
+
+        // Measure makeup (same broadband method as the built-in cabs).
+        const int chs = (int) reader->numChannels;
+        const int len = (int) reader->lengthInSamples;
+        juce::AudioBuffer<float> irBuf (juce::jmax (1, chs), len);
+        reader->read (&irBuf, 0, len, 0, true, true);
+
+        std::vector<float> irMono ((size_t) len, 0.0f);
+        for (int ch = 0; ch < irBuf.getNumChannels(); ++ch)
+        {
+            const float* d = irBuf.getReadPointer (ch);
+            for (int k = 0; k < len; ++k) irMono[(size_t) k] += d[k];
+        }
+        const float inv = 1.0f / (float) juce::jmax (1, irBuf.getNumChannels());
+        for (auto& v : irMono) v *= inv;
+
+        double makeup = 1.0;
+        if (! ampRefStored.empty() && ampRefRmsStored > 1.0e-9)
+        {
+            const double wet = rmsOfConvolution (ampRefStored, irMono);
+            if (wet > 1.0e-9) makeup = ampRefRmsStored / wet;
+        }
+        userCabMakeup.store ((float) juce::jlimit (0.0625, 64.0, makeup));
+
+        userConvolver.loadImpulseResponse (
+            file, juce::dsp::Convolution::Stereo::no,
+            juce::dsp::Convolution::Trim::yes, 0,
+            juce::dsp::Convolution::Normalise::no);
+
+        userIrFile = file;
+        userIrLoaded.store (true);
+        return true;
+    }
+
+    // Load a user NAM rig (.nam) from a file (message thread). RT-safe swap.
+    bool loadUserRig (const juce::File& file)
+    {
+        if (! file.existsAsFile())
+            return false;
+
+        std::unique_ptr<nam::DSP> dsp;
+        try
+        {
+            dsp = nam::get_dsp (std::filesystem::path (file.getFullPathName().toStdString()));
+        }
+        catch (const std::exception&) { return false; }
+        if (! dsp) return false;
+
+        dsp->Reset (namRate, namMaxBlock);
+        const double loud  = dsp->HasLoudness() ? dsp->GetLoudness() : kTargetLufs;
+        const double match = std::pow (10.0, (kTargetLufs - loud) / 20.0);
+
+        {
+            const juce::SpinLock::ScopedLockType sl (userRigLock);
+            userRig      = std::move (dsp);
+            userRigMatch = match;
+        }
+        userRigFile = file;
+        userRigReady.store (true);
+        return true;
+    }
+
+    bool hasUserIr()  const noexcept { return userIrLoaded.load(); }
+    bool hasUserRig() const noexcept { return userRigReady.load(); }
 
     //==============================================================================
     void process (juce::AudioBuffer<float>& buffer, const Params& p)
@@ -274,7 +372,22 @@ public:
         // vs cabbed signal with a smoothed Cab Mix so changing the cab amount
         // never clicks or jumps in level ("cab status weirdness").
         {
-            const int idx = juce::jlimit (0, 2, p.irIndex);
+            const int idx = juce::jlimit (0, 3, p.irIndex);
+
+            // Pick convolver + makeup: user slot if selected and loaded.
+            juce::dsp::Convolution* conv = nullptr;
+            float mk = 1.0f;
+            if (idx == 3 && userIrLoaded.load())
+            {
+                conv = &userConvolver;
+                mk   = userCabMakeup.load();
+            }
+            else
+            {
+                const int bi = (idx == 3 ? 0 : idx);
+                conv = &convolvers[(size_t) bi];
+                mk   = cabMakeup[(size_t) bi];
+            }
 
             // Stash the dry (pre-cab) amp signal.
             for (int ch = 0; ch < numChannels; ++ch)
@@ -286,9 +399,9 @@ public:
             {
                 juce::dsp::AudioBlock<float>              block (buffer);
                 juce::dsp::ProcessContextReplacing<float> ctx (block);
-                convolvers[(size_t) idx].process (ctx);
+                conv->process (ctx);
             }
-            buffer.applyGain (cabMakeup[(size_t) idx]);
+            buffer.applyGain (mk);
 
             // Smoothed crossfade: out = dry*(1-m) + wet*m.
             cabMixSmoothed.setTargetValue (juce::jlimit (0.0f, 1.0f, p.cabMix));
@@ -338,8 +451,26 @@ private:
 
         if (p.rigMode == RigMode::Single)
         {
-            const int idx = juce::jlimit (0, 2, p.singleIndex);
-            if (rigs[(size_t) idx])
+            const int idx = juce::jlimit (0, 3, p.singleIndex);
+
+            if (idx == 3) // user rig
+            {
+                const juce::SpinLock::ScopedTryLockType sl (userRigLock);
+                if (sl.isLocked() && userRig)
+                {
+                    std::copy (in, in + count, rigOut.begin());
+                    double* ip[1] = { rigOut.data() };
+                    double* op[1] = { rigOut.data() };
+                    userRig->process (ip, op, count);
+                    for (int i = 0; i < count; ++i)
+                        out[i] = rigOut[(size_t) i] * userRigMatch;
+                }
+                else
+                {
+                    std::copy (in, in + count, out); // not ready -> dry passthrough
+                }
+            }
+            else if (rigs[(size_t) idx])
             {
                 std::copy (in, in + count, rigOut.begin());
                 double* ip[1] = { rigOut.data() };
@@ -456,6 +587,8 @@ private:
         // true cab-induced level drop.
         std::vector<double> ampRef = makeAmpReference();
         const double ampRefRms = rms (ampRef);
+        ampRefStored = ampRef;            // kept for user-IR makeup measurement
+        ampRefRmsStored = ampRefRms;
 
         for (size_t i = 0; i < 3; ++i)
         {
@@ -579,6 +712,20 @@ private:
 
     std::array<juce::dsp::Convolution, 3> convolvers;
     std::array<float, 3> cabMakeup { 1.0f, 1.0f, 1.0f }; // level-match cab on/off
+
+    // User-loaded cab IR + NAM rig slots.
+    juce::dsp::Convolution userConvolver;
+    std::atomic<bool>  userIrLoaded { false };
+    std::atomic<float> userCabMakeup { 1.0f };
+    juce::File userIrFile;
+    std::unique_ptr<nam::DSP> userRig;
+    std::atomic<bool> userRigReady { false };
+    double userRigMatch = 1.0;
+    juce::SpinLock userRigLock;
+    juce::File userRigFile;
+    juce::dsp::ProcessSpec lastSpec {};
+    std::vector<double> ampRefStored;
+    double ampRefRmsStored = 0.0;
 
     juce::dsp::StateVariableTPTFilter<float> lowCut;     // output sub-bass high-pass
 

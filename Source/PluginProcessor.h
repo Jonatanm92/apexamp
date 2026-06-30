@@ -41,6 +41,10 @@ public:
     std::atomic<float> inputMagnitude  { 0.0f };
     std::atomic<float> outputMagnitude { 0.0f };
 
+    // User-loaded cab IR / NAM rig (called from the editor / message thread).
+    bool loadUserIr  (const juce::File& f) { return engine.loadUserIr (f); }
+    bool loadUserRig (const juce::File& f) { return engine.loadUserRig (f); }
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     NamEngine::Params gatherParams();

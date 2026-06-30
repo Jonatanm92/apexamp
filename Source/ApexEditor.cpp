@@ -173,8 +173,42 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     };
 
     setupCombo (rigModeBox, rigModeLabel, "MODE", { "Single", "Blend" }, "rigMode", rigModeAtt);
-    setupCombo (rigBox,     rigLabel,     "RIG",  { "Bite", "Body", "Edge" }, "rig", rigAtt);
-    setupCombo (irBox,      irLabel,      "CABINET", { "Ashen", "Meshuggah", "PDI-09" }, "ir", irAtt);
+    setupCombo (rigBox,     rigLabel,     "RIG",  { "Bite", "Body", "Edge", "User" }, "rig", rigAtt);
+    setupCombo (irBox,      irLabel,      "CABINET", { "Ashen", "Meshuggah", "PDI-09", "User" }, "ir", irAtt);
+
+    // Load-your-own buttons.
+    loadRigButton.setTooltip ("Load your own NAM capture (.nam) into the User rig slot");
+    loadRigButton.onClick = [this]
+    {
+        fileChooser = std::make_unique<juce::FileChooser> (
+            "Load NAM rig", juce::File(), "*.nam");
+        fileChooser->launchAsync (juce::FileBrowserComponent::openMode
+                                  | juce::FileBrowserComponent::canSelectFiles,
+            [this] (const juce::FileChooser& fc)
+            {
+                auto f = fc.getResult();
+                if (f.existsAsFile() && proc.loadUserRig (f))
+                    if (auto* p = proc.apvts.getParameter ("rig"))
+                        p->setValueNotifyingHost (p->convertTo0to1 (3.0f)); // select "User"
+            });
+    };
+    loadIrButton.setTooltip ("Load your own cabinet IR (.wav/.aiff/.flac) into the User slot");
+    loadIrButton.onClick = [this]
+    {
+        fileChooser = std::make_unique<juce::FileChooser> (
+            "Load cabinet IR", juce::File(), "*.wav;*.aiff;*.aif;*.flac");
+        fileChooser->launchAsync (juce::FileBrowserComponent::openMode
+                                  | juce::FileBrowserComponent::canSelectFiles,
+            [this] (const juce::FileChooser& fc)
+            {
+                auto f = fc.getResult();
+                if (f.existsAsFile() && proc.loadUserIr (f))
+                    if (auto* p = proc.apvts.getParameter ("ir"))
+                        p->setValueNotifyingHost (p->convertTo0to1 (3.0f)); // select "User"
+            });
+    };
+    addAndMakeVisible (loadRigButton);
+    addAndMakeVisible (loadIrButton);
 
     addAndMakeVisible (gateButton);
     gateButton.setClickingTogglesState (true);
@@ -464,6 +498,9 @@ void ApexAmpEditor::resized()
         placeKnob (*mixBite, knobRow.removeFromLeft (kw).reduced (4, 0));
         placeKnob (*mixBody, knobRow.removeFromLeft (kw).reduced (4, 0));
         placeKnob (*mixEdge, knobRow.reduced (4, 0));
+
+        p.removeFromTop (6);
+        loadRigButton.setBounds (p.removeFromTop (26).withSizeKeepingCentre (150, 26));
     }
 
     // ----- CABINET panel -----
@@ -478,6 +515,9 @@ void ApexAmpEditor::resized()
         placeKnob (*cabMix,   knobRow.removeFromLeft (kw).reduced (4, 0));
         placeKnob (*presence, knobRow.removeFromLeft (kw).reduced (4, 0));
         placeKnob (*lowCut,   knobRow.reduced (4, 0));
+
+        p.removeFromTop (6);
+        loadIrButton.setBounds (p.removeFromTop (26).withSizeKeepingCentre (150, 26));
     }
 
     // ----- OUTPUT panel -----

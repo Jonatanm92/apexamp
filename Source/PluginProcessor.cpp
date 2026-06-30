@@ -55,7 +55,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
 
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { pid::rig, 1 }, "Rig",
-        StringArray { "Bite", "Body", "Edge" }, 0));
+        StringArray { "Bite", "Body", "Edge", "User" }, 0));
 
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::mixBite, 1 }, "Blend: Bite",
         NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
@@ -70,7 +70,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
 
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { pid::ir, 1 }, "Cabinet IR",
-        StringArray { "Ashen", "Meshuggah", "PDI-09" }, 0));
+        StringArray { "Ashen", "Meshuggah", "PDI-09", "User" }, 0));
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::gateOn, 1 }, "Gate", false));
 

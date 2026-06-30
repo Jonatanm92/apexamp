@@ -93,6 +93,9 @@ private:
 
     juce::Label rigModeLabel, rigLabel, irLabel;
 
+    juce::TextButton loadRigButton { "LOAD RIG" };
+    juce::TextButton loadIrButton  { "LOAD IR" };
+
     juce::ToggleButton gateButton { "GATE" };
     std::unique_ptr<BA> gateAtt;
 
