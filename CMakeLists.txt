@@ -117,4 +117,7 @@ if(APEXAMP_BUILD_TESTS)
     add_test(NAME rig_audio
         COMMAND rig_runtime_check
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+    add_executable(resample_check tools/resample_check.cpp)
+    add_test(NAME resample_streaming COMMAND resample_check)
 endif()

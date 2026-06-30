@@ -117,6 +117,7 @@ NamEngine::Params ApexAmpProcessor::gatherParams()
 void ApexAmpProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels());
+    setLatencySamples (engine.getLatencySamples());
 }
 
 bool ApexAmpProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const

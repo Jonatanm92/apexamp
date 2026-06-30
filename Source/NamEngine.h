@@ -57,16 +57,45 @@ public:
         this->sampleRate = sampleRate;
         this->maxBlock   = maxBlockSize;
 
+        // NAM rigs are 48 kHz captures. At any other host rate we resample the
+        // amp stage to/from 48 kHz so the model always runs at its native rate
+        // (correct voicing). At exactly 48 kHz this is a pure bypass.
+        resampling  = std::abs (sampleRate - 48000.0) > 1.0;
+        namRate     = resampling ? 48000.0 : sampleRate;
+        namMaxBlock = resampling
+            ? (int) std::ceil ((maxBlockSize + 4) * 48000.0 / sampleRate) + 16
+            : maxBlockSize;
+
         loadRigs();
 
         for (auto& rig : rigs)
             if (rig)
-                rig->Reset (sampleRate, maxBlockSize);
+                rig->Reset (namRate, namMaxBlock);
 
-        // Scratch buffers (mono, double) for NAM processing.
-        monoIn.assign  ((size_t) maxBlockSize, 0.0);
-        rigOut.assign  ((size_t) maxBlockSize, 0.0);
-        mixBuf.assign  ((size_t) maxBlockSize, 0.0);
+        // Scratch buffers. Host-rate buffers use maxBlock; the 48 kHz NAM
+        // buffers use namMaxBlock (which can exceed the host block size).
+        monoIn.assign    ((size_t) maxBlockSize, 0.0);
+        mixBuf.assign    ((size_t) maxBlockSize, 0.0);
+        rigOut.assign    ((size_t) namMaxBlock, 0.0);
+        nam48.assign     ((size_t) namMaxBlock, 0.0);
+        nam48out.assign  ((size_t) namMaxBlock, 0.0);
+        monoInF.assign   ((size_t) maxBlockSize, 0.0f);
+        nam48fOut.assign ((size_t) namMaxBlock, 0.0f);
+
+        if (resampling)
+        {
+            srcUp.prepare   (sampleRate, 48000.0);
+            srcDown.prepare (48000.0, sampleRate);
+            up48f.clear();
+            up48f.reserve ((size_t) namMaxBlock + 16);
+            hostOutFifo.assign ((size_t) kPrime, 0.0f);
+            hostOutFifo.reserve ((size_t) (maxBlockSize + kPrime + 64));
+            latencySamples = kPrime;
+        }
+        else
+        {
+            latencySamples = 0;
+        }
 
         // Cabinet convolution: one convolver per IR so switching is click-free
         // and we never reload on the audio thread.
@@ -108,16 +137,22 @@ public:
     {
         for (auto& rig : rigs)
             if (rig)
-                rig->Reset (sampleRate, maxBlock);
+                rig->Reset (namRate, namMaxBlock);
         for (auto& c : convolvers)
             c.reset();
         lowCut.reset();
         presenceFilter.reset();
+        srcUp.reset();
+        srcDown.reset();
+        if (resampling)
+            hostOutFifo.assign ((size_t) kPrime, 0.0f);
         gateGain = 1.0f;
         gateOpen = true;
         gateHoldCounter = 0;
         tightLp1 = tightLp2 = 0.0;
     }
+
+    int getLatencySamples() const noexcept { return latencySamples; }
 
     //==============================================================================
     void process (juce::AudioBuffer<float>& buffer, const Params& p)
@@ -190,39 +225,40 @@ public:
             monoIn[(size_t) i] = sum;
         }
 
-        // ---- 2) Run NAM rig(s) into mixBuf -------------------------------------
-        std::fill (mixBuf.begin(), mixBuf.begin() + n, 0.0);
-
-        if (p.rigMode == RigMode::Single)
+        // ---- 2) Run NAM rig(s) -> mixBuf (at 48 kHz when host rate differs) ----
+        if (! resampling)
         {
-            const int idx = juce::jlimit (0, 2, p.singleIndex);
-            if (rigs[(size_t) idx])
-            {
-                std::copy (monoIn.begin(), monoIn.begin() + n, rigOut.begin());
-                double* in[1]  = { rigOut.data() };
-                double* out[1] = { rigOut.data() };
-                rigs[(size_t) idx]->process (in, out, n);
-                const double g = matchGain[(size_t) idx];
-                for (int i = 0; i < n; ++i)
-                    mixBuf[(size_t) i] = rigOut[(size_t) i] * g;
-            }
+            runRigs (p, monoIn.data(), mixBuf.data(), n);
         }
-        else // Blend: sum all three, loudness-matched, scaled by per-layer mix
+        else
         {
-            for (size_t r = 0; r < rigs.size(); ++r)
-            {
-                if (! rigs[r])
-                    continue;
+            for (int i = 0; i < n; ++i)
+                monoInF[(size_t) i] = (float) monoIn[(size_t) i];
 
-                std::copy (monoIn.begin(), monoIn.begin() + n, rigOut.begin());
-                double* in[1]  = { rigOut.data() };
-                double* out[1] = { rigOut.data() };
-                rigs[r]->process (in, out, n);
+            // host -> 48 kHz
+            up48f.clear();
+            srcUp.process (monoInF.data(), n, up48f);
+            const int k = juce::jmin ((int) up48f.size(), namMaxBlock);
 
-                const double g = matchGain[r] * (double) juce::jlimit (0.0f, 1.0f, p.mix[r]) / 3.0;
-                for (int i = 0; i < n; ++i)
-                    mixBuf[(size_t) i] += rigOut[(size_t) i] * g;
-            }
+            for (int i = 0; i < k; ++i)
+                nam48[(size_t) i] = (double) up48f[(size_t) i];
+
+            runRigs (p, nam48.data(), nam48out.data(), k);
+
+            for (int i = 0; i < k; ++i)
+                nam48fOut[(size_t) i] = (float) nam48out[(size_t) i];
+
+            // 48 kHz -> host, buffered so we always emit exactly n samples
+            srcDown.process (nam48fOut.data(), k, hostOutFifo);
+
+            const int avail = (int) hostOutFifo.size();
+            const int take  = juce::jmin (avail, n);
+            for (int i = 0; i < take; ++i)
+                mixBuf[(size_t) i] = (double) hostOutFifo[(size_t) i];
+            for (int i = take; i < n; ++i)
+                mixBuf[(size_t) i] = 0.0;
+            if (take > 0)
+                hostOutFifo.erase (hostOutFifo.begin(), hostOutFifo.begin() + take);
         }
 
         // ---- 3) Write mono result back to all channels (float) -----------------
@@ -293,6 +329,87 @@ public:
 
 private:
     //==============================================================================
+    // Runs the selected rig (Single) or all three loudness-matched rigs (Blend)
+    // over `count` samples of `in`, writing the result to `out`. Uses rigOut as
+    // per-rig scratch (sized to namMaxBlock).
+    void runRigs (const Params& p, const double* in, double* out, int count)
+    {
+        std::fill (out, out + count, 0.0);
+
+        if (p.rigMode == RigMode::Single)
+        {
+            const int idx = juce::jlimit (0, 2, p.singleIndex);
+            if (rigs[(size_t) idx])
+            {
+                std::copy (in, in + count, rigOut.begin());
+                double* ip[1] = { rigOut.data() };
+                double* op[1] = { rigOut.data() };
+                rigs[(size_t) idx]->process (ip, op, count);
+                const double g = matchGain[(size_t) idx];
+                for (int i = 0; i < count; ++i)
+                    out[i] = rigOut[(size_t) i] * g;
+            }
+        }
+        else // Blend
+        {
+            for (size_t r = 0; r < rigs.size(); ++r)
+            {
+                if (! rigs[r]) continue;
+                std::copy (in, in + count, rigOut.begin());
+                double* ip[1] = { rigOut.data() };
+                double* op[1] = { rigOut.data() };
+                rigs[r]->process (ip, op, count);
+                const double g = matchGain[r] * (double) juce::jlimit (0.0f, 1.0f, p.mix[r]) / 3.0;
+                for (int i = 0; i < count; ++i)
+                    out[i] += rigOut[(size_t) i] * g;
+            }
+        }
+    }
+
+    //==============================================================================
+    // Streaming arbitrary-ratio resampler (Lagrange) with an input FIFO so we
+    // can convert variable-length blocks while preserving phase continuity.
+    struct RateConverter
+    {
+        juce::LagrangeInterpolator interp;
+        double ratio = 1.0;           // input samples consumed per output sample
+        std::vector<float> fifo;
+
+        void prepare (double srcRate, double dstRate)
+        {
+            interp.reset();
+            ratio = srcRate / dstRate;
+            fifo.clear();
+            fifo.reserve (8192);
+        }
+
+        void reset()
+        {
+            interp.reset();
+            fifo.clear();
+        }
+
+        // Appends `numSrc` input samples, then appends as many resampled output
+        // samples as are currently available to `out`.
+        void process (const float* src, int numSrc, std::vector<float>& out)
+        {
+            fifo.insert (fifo.end(), src, src + numSrc);
+            const int avail = (int) fifo.size();
+            const int numOut = (int) std::floor ((double) (avail - 2) / ratio);
+            if (numOut <= 0)
+                return;
+
+            const size_t base = out.size();
+            out.resize (base + (size_t) numOut);
+            const int used = interp.process (ratio, fifo.data(), out.data() + base, numOut);
+            const int toErase = juce::jlimit (0, (int) fifo.size(), used);
+            if (toErase > 0)
+                fifo.erase (fifo.begin(), fifo.begin() + toErase);
+        }
+    };
+
+    static constexpr int kPrime = 32; // output FIFO priming = resampler latency
+
     void loadRigs()
     {
         struct RigAsset { const char* data; int size; };
@@ -394,7 +511,7 @@ private:
         // Restore rig states (the reference run disturbed the first rig).
         for (auto& rig : rigs)
             if (rig)
-                rig->Reset (sampleRate, maxBlock);
+                rig->Reset (namRate, namMaxBlock);
     }
 
     // ---- level-measurement helpers -----------------------------------------
@@ -485,6 +602,15 @@ private:
     juce::SmoothedValue<float> cabMixSmoothed;           // click-free cab dry/wet
 
     std::vector<double> monoIn, rigOut, mixBuf;
+
+    // 48 kHz resampling state (only active when host rate != 48 kHz)
+    bool   resampling  = false;
+    double namRate     = 48000.0;
+    int    namMaxBlock = 512;
+    int    latencySamples = 0;
+    RateConverter srcUp, srcDown;
+    std::vector<float>  monoInF, up48f, nam48fOut, hostOutFifo;
+    std::vector<double> nam48, nam48out;
 
     float gateGain = 1.0f;
     bool  gateOpen = true;
