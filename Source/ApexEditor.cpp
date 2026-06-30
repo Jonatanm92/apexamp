@@ -208,7 +208,65 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     addAndMakeVisible (prevPresetButton);
     addAndMakeVisible (nextPresetButton);
 
-    setSize (1000, 560);
+    // Save / Load user presets to a .apex file
+    savePresetButton.setTooltip ("Save current settings to a file");
+    loadPresetButton.setTooltip ("Load settings from a file");
+    savePresetButton.onClick = [this]
+    {
+        fileChooser = std::make_unique<juce::FileChooser> (
+            "Save ApexAmp preset", juce::File(), "*.apex");
+        fileChooser->launchAsync (juce::FileBrowserComponent::saveMode
+                                  | juce::FileBrowserComponent::canSelectFiles
+                                  | juce::FileBrowserComponent::warnAboutOverwriting,
+            [this] (const juce::FileChooser& fc)
+            {
+                auto f = fc.getResult();
+                if (f != juce::File())
+                {
+                    if (! f.hasFileExtension ("apex")) f = f.withFileExtension ("apex");
+                    if (auto xml = proc.apvts.copyState().createXml())
+                        xml->writeTo (f);
+                }
+            });
+    };
+    loadPresetButton.onClick = [this]
+    {
+        fileChooser = std::make_unique<juce::FileChooser> (
+            "Load ApexAmp preset", juce::File(), "*.apex");
+        fileChooser->launchAsync (juce::FileBrowserComponent::openMode
+                                  | juce::FileBrowserComponent::canSelectFiles,
+            [this] (const juce::FileChooser& fc)
+            {
+                auto f = fc.getResult();
+                if (f.existsAsFile())
+                    if (auto xml = juce::XmlDocument::parse (f))
+                        proc.apvts.replaceState (juce::ValueTree::fromXml (*xml));
+            });
+    };
+    addAndMakeVisible (savePresetButton);
+    addAndMakeVisible (loadPresetButton);
+
+    // Bypass + About
+    bypassButton.setClickingTogglesState (true);
+    bypassButton.setTooltip ("Bypass the whole plugin");
+    bypassAtt = std::make_unique<BA> (proc.apvts, "bypass", bypassButton);
+    addAndMakeVisible (bypassButton);
+
+    aboutButton.setTooltip ("About ApexAmp");
+    aboutButton.onClick = [this]
+    {
+        juce::AlertWindow::showMessageBoxAsync (
+            juce::MessageBoxIconType::InfoIcon, "About ApexAmp",
+            "ApexAmp  v0.5.0\n\n"
+            "Neural capture amp engine for modern metal.\n"
+            "Amp stage runs at native 48 kHz.\n\n"
+            "Powered by NeuralAmpModelerCore (MIT).\n"
+            "Built with JUCE.\n\n"
+            "(c) PolychromeNext");
+    };
+    addAndMakeVisible (aboutButton);
+
+    setSize (1040, 560);
     startTimerHz (30);
 }
 
@@ -341,13 +399,21 @@ void ApexAmpEditor::resized()
     headerArea = full.removeFromTop (72);
     full.removeFromTop (12);
 
-    // preset bar on the right of the header
+    // preset / utility bar on the right of the header
     {
-        auto bar = headerArea.removeFromRight (380).reduced (14, 19); // 34 px tall
-        prevPresetButton.setBounds (bar.removeFromLeft (34));
-        bar.removeFromLeft (6);
-        nextPresetButton.setBounds (bar.removeFromRight (34));
-        bar.removeFromRight (6);
+        auto bar = headerArea.removeFromRight (470).reduced (10, 19); // 34 px tall
+        aboutButton.setBounds (bar.removeFromRight (30));
+        bar.removeFromRight (8);
+        bypassButton.setBounds (bar.removeFromRight (84));
+        bar.removeFromRight (10);
+        savePresetButton.setBounds (bar.removeFromLeft (52));
+        bar.removeFromLeft (4);
+        loadPresetButton.setBounds (bar.removeFromLeft (52));
+        bar.removeFromLeft (8);
+        prevPresetButton.setBounds (bar.removeFromLeft (28));
+        bar.removeFromLeft (4);
+        nextPresetButton.setBounds (bar.removeFromRight (28));
+        bar.removeFromRight (4);
         presetBox.setBounds (bar);
     }
 

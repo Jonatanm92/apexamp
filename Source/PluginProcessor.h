@@ -18,6 +18,8 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
+    juce::AudioProcessorParameter* getBypassParameter() const override { return bypassParam; }
+
     const juce::String getName() const override { return "ApexAmp"; }
     bool acceptsMidi() const override  { return false; }
     bool producesMidi() const override { return false; }
@@ -44,6 +46,7 @@ private:
     NamEngine::Params gatherParams();
 
     NamEngine engine;
+    juce::AudioParameterBool* bypassParam = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ApexAmpProcessor)
 };

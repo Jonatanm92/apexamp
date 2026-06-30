@@ -99,6 +99,11 @@ private:
     // preset bar
     juce::ComboBox  presetBox;
     juce::TextButton prevPresetButton { "<" }, nextPresetButton { ">" };
+    juce::TextButton savePresetButton { "SAVE" }, loadPresetButton { "LOAD" };
+    juce::TextButton aboutButton { "?" };
+    juce::ToggleButton bypassButton { "BYPASS" };
+    std::unique_ptr<BA> bypassAtt;
+    std::unique_ptr<juce::FileChooser> fileChooser;
 
     // cached panel rects (set in resized(), used in paint())
     juce::Rectangle<int> headerArea, inputPanel, rigPanel, cabPanel, outPanel;

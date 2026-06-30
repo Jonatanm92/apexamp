@@ -26,12 +26,16 @@ ApexAmpProcessor::ApexAmpProcessor()
           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMETERS", createLayout())
 {
+    bypassParam = dynamic_cast<juce::AudioParameterBool*> (apvts.getParameter ("bypass"));
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayout()
 {
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout layout;
+
+    layout.add (std::make_unique<AudioParameterBool> (
+        ParameterID { "bypass", 1 }, "Bypass", false));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { pid::inputGain, 1 }, "Input Gain",
@@ -147,7 +151,8 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         inMag = juce::jmax (inMag, buffer.getMagnitude (ch, 0, n));
     inputMagnitude.store (inMag);
 
-    engine.process (buffer, gatherParams());
+    if (bypassParam == nullptr || ! bypassParam->get())
+        engine.process (buffer, gatherParams());
 
     // Output level (post-engine).
     float outMag = 0.0f;
