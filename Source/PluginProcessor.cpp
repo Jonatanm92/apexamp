@@ -6,6 +6,10 @@ namespace pid
     constexpr auto inputGain  = "inputGain";
     constexpr auto outputGain = "outputGain";
     constexpr auto tight      = "tight";
+    constexpr auto boostOn    = "boostOn";
+    constexpr auto boostDrive = "boostDrive";
+    constexpr auto boostTone  = "boostTone";
+    constexpr auto boostLevel = "boostLevel";
     constexpr auto rigMode    = "rigMode";
     constexpr auto rig        = "rig";
     constexpr auto mixBite    = "mixBite";
@@ -48,6 +52,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { pid::tight, 1 }, "Tight",
         NormalisableRange<float> (20.0f, 300.0f, 1.0f, 0.5f), 20.0f));
+
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::boostOn, 1 }, "Boost", false));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::boostDrive, 1 }, "Boost Drive",
+        NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::boostTone, 1 }, "Boost Tone",
+        NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::boostLevel, 1 }, "Boost Level",
+        NormalisableRange<float> (-12.0f, 12.0f, 0.1f), 0.0f));
 
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { pid::rigMode, 1 }, "Rig Mode",
@@ -101,6 +113,10 @@ NamEngine::Params ApexAmpProcessor::gatherParams()
     p.inputGainDb  = get (pid::inputGain);
     p.outputGainDb = get (pid::outputGain);
     p.tightHz      = get (pid::tight);
+    p.boostOn      = get (pid::boostOn) > 0.5f;
+    p.boostDrive   = get (pid::boostDrive) * 0.01f;
+    p.boostTone    = get (pid::boostTone) * 0.01f;
+    p.boostLevelDb = get (pid::boostLevel);
     p.rigMode      = ((int) get (pid::rigMode) == 1) ? NamEngine::RigMode::Blend
                                                      : NamEngine::RigMode::Single;
     p.singleIndex  = (int) get (pid::rig);

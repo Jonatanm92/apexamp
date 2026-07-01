@@ -78,6 +78,9 @@ private:
     juce::OwnedArray<Knob> knobs;
     Knob* inputGain  = nullptr;
     Knob* tight      = nullptr;
+    Knob* boostDrive = nullptr;
+    Knob* boostTone  = nullptr;
+    Knob* boostLevel = nullptr;
     Knob* gateThresh = nullptr;
     Knob* gateHold   = nullptr;
     Knob* mixBite    = nullptr;
@@ -99,6 +102,9 @@ private:
     juce::ToggleButton gateButton { "GATE" };
     std::unique_ptr<BA> gateAtt;
 
+    juce::ToggleButton boostButton { "BOOST" };
+    std::unique_ptr<BA> boostAtt;
+
     // preset bar
     juce::ComboBox  presetBox;
     juce::TextButton prevPresetButton { "<" }, nextPresetButton { ">" };
@@ -109,7 +115,7 @@ private:
     std::unique_ptr<juce::FileChooser> fileChooser;
 
     // cached panel rects (set in resized(), used in paint())
-    juce::Rectangle<int> headerArea, inputPanel, rigPanel, cabPanel, outPanel;
+    juce::Rectangle<int> headerArea, inputPanel, boostPanel, rigPanel, cabPanel, outPanel;
 
     // smoothed meter values
     float inMeter = 0.0f, outMeter = 0.0f;

@@ -40,6 +40,10 @@ public:
         float   inputGainDb  = 0.0f;
         float   outputGainDb = 0.0f;
         float   tightHz      = 20.0f;      // pre-amp high-pass (20 = off)
+        bool    boostOn      = false;      // Screamer boost in front of the amp
+        float   boostDrive   = 0.5f;       // 0..1
+        float   boostTone    = 0.5f;       // 0..1 (dark..bright)
+        float   boostLevelDb = 0.0f;       // pedal output level
         RigMode rigMode      = RigMode::Single;
         int     singleIndex  = 0;          // 0..2
         std::array<float, 3> mix { 1.0f, 1.0f, 1.0f }; // blend layer mixes 0..1
@@ -144,6 +148,7 @@ public:
         gateOpen = true;
         gateHoldCounter = 0;
         tightLp1 = tightLp2 = 0.0;
+        screamer.reset();
 
         prepared = true;
     }
@@ -171,6 +176,7 @@ public:
         gateOpen = true;
         gateHoldCounter = 0;
         tightLp1 = tightLp2 = 0.0;
+        screamer.reset();
     }
 
     int getLatencySamples() const noexcept { return latencySamples; }
@@ -322,6 +328,12 @@ public:
 
             monoIn[(size_t) i] = sum;
         }
+
+        // ---- 1.5) Screamer boost in front of the amp (optional) ----------------
+        if (p.boostOn)
+            screamer.process (monoIn.data(), n, sampleRate,
+                              p.boostDrive, p.boostTone,
+                              juce::Decibels::decibelsToGain ((double) p.boostLevelDb));
 
         // ---- 2) Run NAM rig(s) -> mixBuf (at 48 kHz when host rate differs) ----
         if (! resampling)
@@ -540,6 +552,38 @@ private:
     };
 
     static constexpr int kPrime = 32; // output FIFO priming = resampler latency
+
+    //==============================================================================
+    // Tube-screamer-style boost: tighten lows, soft asymmetric clip (mid focus),
+    // tone tilt, output level. Runs on the mono DI in front of the amp.
+    struct Screamer
+    {
+        double hpZ = 0.0, toneZ = 0.0;
+        void reset() { hpZ = 0.0; toneZ = 0.0; }
+
+        void process (double* x, int n, double sr, float drive01, float tone01, double level)
+        {
+            const double hpA   = 1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi * 180.0 / sr);
+            const double g      = 1.0 + (double) juce::jlimit (0.0f, 1.0f, drive01) * 24.0;
+            const double toneHz = 2200.0 + (double) juce::jlimit (0.0f, 1.0f, tone01) * 5500.0;
+            const double lpA    = 1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi * toneHz / sr);
+            const double bias   = 0.18;                // asymmetry -> even harmonics
+            const double norm   = std::tanh (bias);
+            // Compensate so low drive stays near unity level.
+            const double makeup = 1.0 / std::tanh (g * 0.5);
+
+            for (int i = 0; i < n; ++i)
+            {
+                const double in = x[i];
+                hpZ += hpA * (in - hpZ);
+                const double hp = in - hpZ;            // tightened (high-passed)
+                double d = std::tanh (g * hp + bias) - norm;
+                d *= makeup;
+                toneZ += lpA * (d - toneZ);            // tone low-pass
+                x[i] = toneZ * level;
+            }
+        }
+    };
 
     void loadRigs()
     {
@@ -764,4 +808,5 @@ private:
     int   gateHoldCounter = 0;
 
     double tightLp1 = 0.0, tightLp2 = 0.0; // pre-amp high-pass state
+    Screamer screamer;
 };

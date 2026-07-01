@@ -146,6 +146,9 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
 
     inputGain  = &addKnob ("inputGain",  "INPUT",     " dB", 1, "Drive into the amp capture");
     tight      = &addKnob ("tight",      "TIGHT",     " Hz", 0, "Pre-amp high-pass: tightens low end before the amp (20 = off)");
+    boostDrive = &addKnob ("boostDrive", "DRIVE",     " %",  0, "Screamer boost drive (overdrive amount)");
+    boostTone  = &addKnob ("boostTone",  "TONE",      " %",  0, "Screamer boost tone (dark to bright)");
+    boostLevel = &addKnob ("boostLevel", "LEVEL",     " dB", 1, "Screamer boost output level");
     gateThresh = &addKnob ("gate",       "THRESH",    " dB", 0, "Noise gate threshold");
     gateHold   = &addKnob ("gateHold",   "HOLD",      " ms", 0, "How long the gate stays open after the last transient");
     mixBite    = &addKnob ("mixBite",    "BITE",      "",    2, "Blend amount of the Bite rig (Blend mode)");
@@ -214,6 +217,11 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     gateButton.setClickingTogglesState (true);
     gateButton.setTooltip ("Enable the input noise gate");
     gateAtt = std::make_unique<BA> (proc.apvts, "gateOn", gateButton);
+
+    boostButton.setClickingTogglesState (true);
+    boostButton.setTooltip ("Engage the Screamer boost in front of the amp");
+    boostAtt = std::make_unique<BA> (proc.apvts, "boostOn", boostButton);
+    addAndMakeVisible (boostButton);
 
     // ----- Preset bar -----
     for (int i = 0; i < (int) ApexPresets::all().size(); ++i)
@@ -300,7 +308,7 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     };
     addAndMakeVisible (aboutButton);
 
-    setSize (1040, 560);
+    setSize (1220, 560);
     startTimerHz (30);
 }
 
@@ -412,6 +420,7 @@ void ApexAmpEditor::paint (juce::Graphics& g)
     drawHeader (g, area.removeFromTop (72));
 
     drawPanel (g, inputPanel, "INPUT / GATE");
+    drawPanel (g, boostPanel, "BOOST");
     drawPanel (g, rigPanel,   "RIG");
     drawPanel (g, cabPanel,   "CABINET");
     drawPanel (g, outPanel,   "OUTPUT");
@@ -454,9 +463,10 @@ void ApexAmpEditor::resized()
     const int gap = 12;
     auto row = full;
 
-    inputPanel = row.removeFromLeft (180); row.removeFromLeft (gap);
-    rigPanel   = row.removeFromLeft (300); row.removeFromLeft (gap);
-    cabPanel   = row.removeFromLeft (300); row.removeFromLeft (gap);
+    inputPanel = row.removeFromLeft (170); row.removeFromLeft (gap);
+    boostPanel = row.removeFromLeft (180); row.removeFromLeft (gap);
+    rigPanel   = row.removeFromLeft (290); row.removeFromLeft (gap);
+    cabPanel   = row.removeFromLeft (290); row.removeFromLeft (gap);
     outPanel   = row;
 
     auto placeKnob = [] (Knob& k, juce::Rectangle<int> cell)
@@ -478,6 +488,19 @@ void ApexAmpEditor::resized()
         auto g2 = p.removeFromTop (118);
         placeKnob (*gateThresh, g2.removeFromLeft (g2.getWidth() / 2).reduced (2, 0));
         placeKnob (*gateHold,   g2.reduced (2, 0));
+    }
+
+    // ----- BOOST panel -----
+    {
+        auto p = boostPanel.reduced (12, 14);
+        p.removeFromTop (22); // title
+        boostButton.setBounds (p.removeFromTop (28).reduced (2, 0));
+        p.removeFromTop (6);
+        placeKnob (*boostDrive, p.removeFromTop (120));
+        p.removeFromTop (4);
+        auto row2 = p.removeFromTop (118);
+        placeKnob (*boostTone,  row2.removeFromLeft (row2.getWidth() / 2).reduced (2, 0));
+        placeKnob (*boostLevel, row2.reduced (2, 0));
     }
 
     // ----- RIG panel -----
