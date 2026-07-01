@@ -308,7 +308,7 @@ ApexAmpEditor::ApexAmpEditor (ApexAmpProcessor& p)
     };
     addAndMakeVisible (aboutButton);
 
-    setSize (1220, 560);
+    setSize (1220, 660);
     startTimerHz (30);
 }
 
@@ -419,6 +419,8 @@ void ApexAmpEditor::paint (juce::Graphics& g)
     auto area = getLocalBounds().reduced (16);
     drawHeader (g, area.removeFromTop (72));
 
+    drawSpectrum (g, spectrumArea);
+
     drawPanel (g, inputPanel, "INPUT / GATE");
     drawPanel (g, boostPanel, "BOOST");
     drawPanel (g, rigPanel,   "RIG");
@@ -440,6 +442,8 @@ void ApexAmpEditor::resized()
 {
     auto full = getLocalBounds().reduced (16);
     headerArea = full.removeFromTop (72);
+    full.removeFromTop (10);
+    spectrumArea = full.removeFromTop (84);
     full.removeFromTop (12);
 
     // preset / utility bar on the right of the header
@@ -571,5 +575,81 @@ void ApexAmpEditor::timerCallback()
 
     smooth (inMeter,  toMeter (proc.inputMagnitude.load()));
     smooth (outMeter, toMeter (proc.outputMagnitude.load()));
+
+    // ---- spectrum: process a fresh FFT frame if the audio thread posted one --
+    if (proc.scopeReady.load (std::memory_order_acquire))
+    {
+        static thread_local std::array<float, ApexAmpProcessor::scopeFftSize * 2> tmp;
+        std::copy (proc.scopeFftData.begin(), proc.scopeFftData.end(), tmp.begin());
+        proc.scopeReady.store (false, std::memory_order_release);
+
+        scopeWindow.multiplyWithWindowingTable (tmp.data(), (size_t) ApexAmpProcessor::scopeFftSize);
+        scopeFft.performFrequencyOnlyForwardTransform (tmp.data());
+
+        const int nBins = ApexAmpProcessor::scopeFftSize / 2;
+        const float minDb = -90.0f, maxDb = 0.0f;
+        const float norm  = 2.0f / (float) ApexAmpProcessor::scopeFftSize;
+
+        for (int i = 0; i < kScopeBins; ++i)
+        {
+            // log-spaced frequency mapping (20 Hz .. Nyquist-ish)
+            const float prop = (float) i / (float) (kScopeBins - 1);
+            const float binF = std::pow ((float) nBins, prop);
+            const int   bin  = juce::jlimit (1, nBins - 1, (int) binF);
+            const float db   = juce::Decibels::gainToDecibels (tmp[(size_t) bin] * norm, minDb);
+            const float lvl  = juce::jlimit (0.0f, 1.0f, (db - minDb) / (maxDb - minDb));
+            // fast attack, slow release for a smooth analyzer
+            scope[(size_t) i] += (lvl > scope[(size_t) i] ? 0.6f : 0.2f) * (lvl - scope[(size_t) i]);
+        }
+    }
+
     repaint();
+}
+
+void ApexAmpEditor::drawSpectrum (juce::Graphics& g, juce::Rectangle<int> r)
+{
+    g.setColour (juce::Colour (0xff0a0b0e));
+    g.fillRoundedRectangle (r.toFloat(), 6.0f);
+    g.setColour (ApexLookAndFeel::border);
+    g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 6.0f, 1.0f);
+
+    auto plot = r.reduced (8, 8);
+
+    // faint horizontal grid
+    g.setColour (ApexLookAndFeel::border.withAlpha (0.4f));
+    for (int k = 1; k < 4; ++k)
+    {
+        const int y = plot.getY() + plot.getHeight() * k / 4;
+        g.drawHorizontalLine (y, (float) plot.getX(), (float) plot.getRight());
+    }
+
+    juce::Path fill;
+    fill.startNewSubPath ((float) plot.getX(), (float) plot.getBottom());
+    for (int i = 0; i < kScopeBins; ++i)
+    {
+        const float x = plot.getX() + (float) i / (float) (kScopeBins - 1) * plot.getWidth();
+        const float y = plot.getBottom() - scope[(size_t) i] * plot.getHeight();
+        fill.lineTo (x, y);
+    }
+    fill.lineTo ((float) plot.getRight(), (float) plot.getBottom());
+    fill.closeSubPath();
+
+    g.setGradientFill (juce::ColourGradient (ApexLookAndFeel::accent.withAlpha (0.55f), 0.0f, (float) plot.getY(),
+                                             ApexLookAndFeel::accent.withAlpha (0.05f), 0.0f, (float) plot.getBottom(), false));
+    g.fillPath (fill);
+
+    juce::Path line;
+    for (int i = 0; i < kScopeBins; ++i)
+    {
+        const float x = plot.getX() + (float) i / (float) (kScopeBins - 1) * plot.getWidth();
+        const float y = plot.getBottom() - scope[(size_t) i] * plot.getHeight();
+        if (i == 0) line.startNewSubPath (x, y);
+        else        line.lineTo (x, y);
+    }
+    g.setColour (ApexLookAndFeel::accent.brighter (0.3f));
+    g.strokePath (line, juce::PathStrokeType (1.6f));
+
+    g.setColour (ApexLookAndFeel::textDim);
+    g.setFont (juce::Font (juce::FontOptions (10.0f, juce::Font::bold)));
+    g.drawText ("OUTPUT SPECTRUM", r.reduced (10, 6).removeFromTop (12), juce::Justification::topLeft);
 }

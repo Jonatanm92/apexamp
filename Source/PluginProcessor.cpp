@@ -175,6 +175,19 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
         outMag = juce::jmax (outMag, buffer.getMagnitude (ch, 0, n));
     outputMagnitude.store (outMag);
+
+    // Feed the spectrum scope (mono sum of the output).
+    if (buffer.getNumChannels() > 0)
+    {
+        const int chs = buffer.getNumChannels();
+        for (int i = 0; i < n; ++i)
+        {
+            float s = 0.0f;
+            for (int ch = 0; ch < chs; ++ch)
+                s += buffer.getReadPointer (ch)[i];
+            pushScopeSample (s / (float) chs);
+        }
+    }
 }
 
 juce::AudioProcessorEditor* ApexAmpProcessor::createEditor()

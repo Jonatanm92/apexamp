@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 #include "PluginProcessor.h"
 
 //==============================================================================
@@ -48,6 +49,7 @@ public:
 
 private:
     void timerCallback() override;
+    void drawSpectrum (juce::Graphics&, juce::Rectangle<int>);
 
     using APVTS = juce::AudioProcessorValueTreeState;
     using SA = APVTS::SliderAttachment;
@@ -115,10 +117,17 @@ private:
     std::unique_ptr<juce::FileChooser> fileChooser;
 
     // cached panel rects (set in resized(), used in paint())
-    juce::Rectangle<int> headerArea, inputPanel, boostPanel, rigPanel, cabPanel, outPanel;
+    juce::Rectangle<int> headerArea, spectrumArea, inputPanel, boostPanel, rigPanel, cabPanel, outPanel;
 
     // smoothed meter values
     float inMeter = 0.0f, outMeter = 0.0f;
+
+    // spectrum analyzer
+    juce::dsp::FFT scopeFft { ApexAmpProcessor::scopeFftOrder };
+    juce::dsp::WindowingFunction<float> scopeWindow { (size_t) ApexAmpProcessor::scopeFftSize,
+                                                      juce::dsp::WindowingFunction<float>::hann };
+    static constexpr int kScopeBins = 220;
+    std::array<float, kScopeBins> scope {};   // 0..1 display bins (smoothed)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ApexAmpEditor)
 };
