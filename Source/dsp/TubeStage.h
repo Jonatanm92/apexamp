@@ -8,14 +8,21 @@ namespace apex
 /**
     A single 12AX7-style triode gain stage.
 
-    Per sample:  DC block -> input gain -> asymmetric saturation -> bias shift
-                 -> cathode-bypass low-shelf -> Miller-capacitance lowpass.
+    Per sample:  DC block -> pre-clip high-pass (tighten) -> input gain
+                 -> asymmetric saturation -> bias shift -> presence lift
+                 -> Miller-capacitance lowpass.
 
-    The asymmetry is the heart of the "tube" character: the positive half of the
-    waveform is clipped harder (tanh, models grid conduction) while the negative
-    half compresses more gently (a scaled atan, models plate saturation). Blending
-    the two generates even-order harmonics (2nd/4th) for warmth instead of the
-    purely odd-harmonic fizz a symmetric clipper produces.
+    Two things make this sound like an amp instead of a fuzz pedal:
+
+    1. The *pre-clip high-pass* removes low end BEFORE the nonlinearity. Without
+       it, bass intermodulates through the saturation and turns to mud. Cascading
+       progressively higher corners across stages is exactly how real high-gain
+       amps stay tight.
+
+    2. The asymmetric shaper: the positive half is clipped harder (tanh, models
+       grid conduction) while the negative half compresses more gently (scaled
+       atan, plate saturation). The blend makes even + odd harmonics for a richer,
+       grainier texture than a symmetric clipper.
 */
 class TubeStage
 {
@@ -24,18 +31,29 @@ public:
     {
         fs = sampleRate;
         dcBlock.setCutoff (fs, 12.0);
-        // Miller / interstage lowpass — rolls off ultrasonic content per stage.
-        miller = Biquad::makeLowpass (fs, 12000.0, 0.707);
-        // Cathode-bypass capacitor gives a low-mid lift as gain rises.
-        cathode = Biquad::makeLowShelf (fs, 250.0, 0.7, 2.5);
+        setHighpass (100.0);
+        // Post-clip upper-mid lift = the "grind"/presence a cathode-bypass cap adds.
+        // Kept modest because this stacks across the cascade — too much here turns
+        // amplified hiss/fizz into harsh high-frequency noise.
+        presence = Biquad::makeHighShelf (fs, 1800.0, 0.7, 1.3);
+        // Interstage lowpass — rolls off ultrasonic hiss/aliasing per stage while
+        // leaving the 2-5 kHz bite intact.
+        miller = Biquad::makeLowpass (fs, 11000.0, 0.707);
         reset();
     }
 
     void reset() noexcept
     {
         dcBlock.reset();
+        preHP.reset();
+        presence.reset();
         miller.reset();
-        cathode.reset();
+    }
+
+    /** Pre-clip high-pass corner (Hz). Higher = tighter / less bass into the clip. */
+    void setHighpass (double freq) noexcept
+    {
+        preHP = Biquad::makeHighpass (fs, freq, 0.707);
     }
 
     /** drive: linear input gain. bias: -0.1..+0.1 tilts harmonic content. */
@@ -48,6 +66,7 @@ public:
     inline float processSample (float x) noexcept
     {
         x = dcBlock.processSample (x);
+        x = preHP.processSample (x);   // tighten lows BEFORE clipping
         x *= drive;
 
         // Asymmetric waveshaper around a shifted operating point.
@@ -60,7 +79,7 @@ public:
 
         y -= bias * 0.8f; // re-centre so DC offset stays small before the blocker
 
-        y = cathode.processSample (y);
+        y = presence.processSample (y);
         y = miller.processSample (y);
         return y;
     }
@@ -78,7 +97,8 @@ private:
     float  bias  = 0.0f;
 
     DCBlocker dcBlock;
-    Biquad    cathode;
+    Biquad    preHP;
+    Biquad    presence;
     Biquad    miller;
 };
 } // namespace apex

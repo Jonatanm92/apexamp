@@ -42,7 +42,8 @@ public:
 
         tightHP  = Biquad::makeHighpass (fs, 80.0, 0.707);
         scoopPre = Biquad::makePeak     (fs, 550.0, 1.0, 0.0); // set in recalc
-        brightCap = Biquad::makeHighShelf (fs, 3000.0, 0.7, 4.0);
+        // Bright pre-emphasis drives the upper harmonics that become "grind".
+        brightCap = Biquad::makeHighShelf (fs, 2200.0, 0.7, 5.0);
         reset();
     }
 
@@ -76,11 +77,10 @@ public:
             const float scooped = scoopPre.processSample (x);
             x = x * (1.0f - superCut) + scooped * superCut;
         }
-        else
-        {
-            // Tight channel gets a touch of bright lift going into the first stage.
-            x = brightCap.processSample (x);
-        }
+
+        // Both channels get a bright lift into the stages so there is upper-harmonic
+        // content for the saturation to turn into grain/bite.
+        x = brightCap.processSample (x);
 
         for (int i = 0; i < numActiveStages; ++i)
             x = stages[i].processSample (x);
@@ -105,26 +105,35 @@ public:
 private:
     void recalc() noexcept
     {
-        // Channel sets stage count and tightness range.
+        // Channel sets stage count and base tightness.
+        float baseHP;
         if (channel == PreampChannel::tight)
         {
             numActiveStages = 3;
-            const float corner = 70.0f + tight * 180.0f;   // 70..250 Hz
-            tightHP = Biquad::makeHighpass (fs, corner, 0.707);
+            baseHP = 90.0f + tight * 90.0f;   // 90..180 Hz
+            tightHP = Biquad::makeHighpass (fs, baseHP, 0.707);
         }
         else
         {
             numActiveStages = 4;                            // more gain stages
-            const float corner = 60.0f + tight * 140.0f;    // 60..200 Hz
-            tightHP = Biquad::makeHighpass (fs, corner, 0.707);
+            baseHP = 80.0f + tight * 80.0f;   // 80..160 Hz
+            tightHP = Biquad::makeHighpass (fs, baseHP, 0.707);
             scoopPre = Biquad::makePeak (fs, 550.0, 1.1, -10.0f); // scoop shape
         }
 
         // Quadratic gain taper => usable lower half, big top half.
         const float g = gain * gain;
         const float driveLin = 1.0f + g * 22.0f;
-        for (auto& s : stages)
-            s.setParams (driveLin, bias);
+
+        // Progressively tighten the low end deeper into the chain. Each stage
+        // high-passes a little higher than the last, so bass can't stack up and
+        // turn to mud through the cascade — this is what keeps high gain "chuggy"
+        // instead of "woofy".
+        for (int i = 0; i < maxStages; ++i)
+        {
+            stages[i].setParams (driveLin, bias);
+            stages[i].setHighpass (baseHP + (float) i * 40.0f);
+        }
     }
 
     double fs = 44100.0;

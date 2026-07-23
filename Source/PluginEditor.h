@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "PluginProcessor.h"
+#include "Presets.h"
 
 /** A labelled rotary knob bundling a Slider + attachment + caption. */
 struct Knob : public juce::Component
@@ -47,19 +48,26 @@ public:
 private:
     ApexAmpProcessor& proc;
 
-    juce::ComboBox channelBox, tonestackBox;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> channelAtt, tonestackAtt;
+    juce::ComboBox presetBox;
+    juce::TextButton savePresetButton { "Save" }, loadPresetButton { "Load" };
+
+    juce::ComboBox channelBox, tonestackBox, cabTypeBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> channelAtt, tonestackAtt, cabTypeAtt;
 
     juce::ToggleButton cabButton { "Cab" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> cabAtt;
     juce::TextButton loadIRButton { "Load IR..." };
+    juce::TextButton clearIRButton { "Built-in" };
+    juce::Label      irLabel;
 
     // Knobs
     std::unique_ptr<Knob> kInput, kGain, kPush, kTight, kSuperCut, kBias,
                           kBass, kMid, kTreble, kChug, kLowDrv, kLowMix,
-                          kSag, kPower, kMaster;
+                          kSag, kPower, kGate, kMaster;
 
     std::unique_ptr<juce::FileChooser> chooser;
+
+    void updateIRLabel();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ApexAmpEditor)
 };

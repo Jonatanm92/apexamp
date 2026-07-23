@@ -23,11 +23,13 @@ public:
         fs = sampleRate;
         sagEnv.prepare (fs);
         sagEnv.setTimes (8.0f, 350.0f);  // slow, musical "breathing"
-        coreLoss = Biquad::makeLowpass (fs, 9000.0, 0.707);
+        hpf      = Biquad::makeHighpass  (fs, 60.0,   0.707); // keep the power stage tight
+        presence = Biquad::makeHighShelf (fs, 3000.0, 0.7, 2.5); // grind before the transformer
+        coreLoss = Biquad::makeLowpass   (fs, 12000.0, 0.707);   // gentle, not dark
         reset();
     }
 
-    void reset() noexcept { sagEnv.reset(); coreLoss.reset(); }
+    void reset() noexcept { sagEnv.reset(); hpf.reset(); presence.reset(); coreLoss.reset(); }
 
     /** sagDepth, drive both 0..1. */
     void setParams (float sagDepthN, float driveN) noexcept
@@ -38,11 +40,14 @@ public:
 
     inline float processSample (float x) noexcept
     {
+        x = hpf.processSample (x);
+
         const float env = sagEnv.processSample (x);
         const float gainReduction = 1.0f / (1.0f + sagDepth * env * 2.5f);
         x *= gainReduction;
 
         x *= drive;
+        x = presence.processSample (x);
         // Transformer: symmetric-ish soft saturation, rounder than the preamp.
         float y = std::tanh (x * 0.8f) * 1.05f;
         y = coreLoss.processSample (y);
@@ -59,6 +64,8 @@ private:
     double fs = 44100.0;
     float  sagDepth = 0.3f, drive = 1.0f;
     EnvelopeFollower sagEnv;
+    Biquad hpf;
+    Biquad presence;
     Biquad coreLoss;
 };
 } // namespace apex

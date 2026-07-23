@@ -1,26 +1,27 @@
 #include "PluginProcessor.h"
-#include "PluginEditor.h"
+#include "ApexEditor.h"
 
 namespace pid
 {
-    constexpr auto channel    = "channel";
-    constexpr auto tonestack  = "tonestack";
-    constexpr auto inputTrim  = "inputTrim";
-    constexpr auto gain       = "gain";
-    constexpr auto push       = "push";
+    constexpr auto inputGain  = "inputGain";
+    constexpr auto outputGain = "outputGain";
     constexpr auto tight      = "tight";
-    constexpr auto superCut   = "superCut";
-    constexpr auto bias       = "bias";
-    constexpr auto bass       = "bass";
-    constexpr auto mid        = "mid";
-    constexpr auto treble     = "treble";
-    constexpr auto chug       = "chug";
-    constexpr auto lowDirtDrv = "lowDirtDrive";
-    constexpr auto lowDirtMix = "lowDirtMix";
-    constexpr auto sag        = "sag";
-    constexpr auto powerDrive = "powerDrive";
-    constexpr auto cabOn      = "cabOn";
-    constexpr auto master     = "master";
+    constexpr auto boostOn    = "boostOn";
+    constexpr auto boostDrive = "boostDrive";
+    constexpr auto boostTone  = "boostTone";
+    constexpr auto boostLevel = "boostLevel";
+    constexpr auto rigMode    = "rigMode";
+    constexpr auto rig        = "rig";
+    constexpr auto mixBite    = "mixBite";
+    constexpr auto mixBody    = "mixBody";
+    constexpr auto mixEdge    = "mixEdge";
+    constexpr auto cabMix     = "cabMix";
+    constexpr auto ir         = "ir";
+    constexpr auto gateOn     = "gateOn";
+    constexpr auto gate       = "gate";
+    constexpr auto gateHold   = "gateHold";
+    constexpr auto lowCut     = "lowCut";
+    constexpr auto presence   = "presence";
 }
 
 ApexAmpProcessor::ApexAmpProcessor()
@@ -29,6 +30,7 @@ ApexAmpProcessor::ApexAmpProcessor()
           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMETERS", createLayout())
 {
+    bypassParam = dynamic_cast<juce::AudioParameterBool*> (apvts.getParameter ("bypass"));
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayout()
@@ -36,77 +38,98 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout layout;
 
-    auto pct = [] (float def) {
-        return NormalisableRange<float> (0.0f, 1.0f, 0.001f);
-    };
-
-    layout.add (std::make_unique<AudioParameterChoice> (
-        ParameterID { pid::channel, 1 }, "Channel",
-        StringArray { "Tight", "Scoop" }, 0));
-
-    layout.add (std::make_unique<AudioParameterChoice> (
-        ParameterID { pid::tonestack, 1 }, "Tonestack",
-        StringArray { "Marshall", "Fender", "Mesa", "Modern Metal" }, 0));
+    layout.add (std::make_unique<AudioParameterBool> (
+        ParameterID { "bypass", 1 }, "Bypass", false));
 
     layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { pid::inputTrim, 1 }, "Input Trim",
+        ParameterID { pid::inputGain, 1 }, "Input Gain",
         NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f));
 
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::gain, 1 },     "Gain",      pct (0.5f), 0.5f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::push, 1 },     "Push",      pct (0.0f), 0.0f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::tight, 1 },    "Tight",     pct (0.3f), 0.3f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::superCut, 1 }, "Super Cut", pct (0.0f), 0.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::outputGain, 1 }, "Output Gain",
+        NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f));
 
     layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { pid::bias, 1 }, "Bias",
-        NormalisableRange<float> (-0.1f, 0.1f, 0.001f), 0.02f));
+        ParameterID { pid::tight, 1 }, "Tight",
+        NormalisableRange<float> (20.0f, 300.0f, 1.0f, 0.5f), 20.0f));
 
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::bass, 1 },   "Bass",   pct (0.5f), 0.5f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::mid, 1 },    "Mid",    pct (0.5f), 0.5f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::treble, 1 }, "Treble", pct (0.5f), 0.5f));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::boostOn, 1 }, "Boost", false));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::boostDrive, 1 }, "Boost Drive",
+        NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::boostTone, 1 }, "Boost Tone",
+        NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::boostLevel, 1 }, "Boost Level",
+        NormalisableRange<float> (-12.0f, 12.0f, 0.1f), 0.0f));
 
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::chug, 1 },       "Chug",          pct (0.0f), 0.0f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::lowDirtDrv, 1 }, "Low Dirt Drive",pct (0.0f), 0.0f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::lowDirtMix, 1 }, "Low Dirt Mix",  pct (0.0f), 0.0f));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { pid::rigMode, 1 }, "Rig Mode",
+        StringArray { "Single", "Blend" }, 0));
 
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::sag, 1 },        "Sag",         pct (0.3f), 0.3f));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::powerDrive, 1 }, "Power Drive", pct (0.3f), 0.3f));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { pid::rig, 1 }, "Rig",
+        StringArray { "Bite", "Body", "Edge", "User" }, 0));
 
-    layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::cabOn, 1 }, "Cab", true));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::mixBite, 1 }, "Blend: Bite",
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::mixBody, 1 }, "Blend: Body",
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::mixEdge, 1 }, "Blend: Edge",
+        NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f));
 
     layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { pid::master, 1 }, "Master",
-        NormalisableRange<float> (-36.0f, 12.0f, 0.1f), -6.0f));
+        ParameterID { pid::cabMix, 1 }, "Cab Mix",
+        NormalisableRange<float> (0.0f, 100.0f, 0.1f), 100.0f));
+
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { pid::ir, 1 }, "Cabinet IR",
+        StringArray { "Ashen", "Meshuggah", "PDI-09", "User" }, 0));
+
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::gateOn, 1 }, "Gate", false));
+
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::gate, 1 }, "Gate Threshold",
+        NormalisableRange<float> (-80.0f, -20.0f, 0.5f), -60.0f));
+
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::gateHold, 1 }, "Gate Hold",
+        NormalisableRange<float> (10.0f, 500.0f, 1.0f, 0.5f), 50.0f));
+
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::lowCut, 1 }, "Low Cut",
+        NormalisableRange<float> (20.0f, 300.0f, 1.0f, 0.5f), 80.0f));
+
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { pid::presence, 1 }, "Presence",
+        NormalisableRange<float> (-12.0f, 12.0f, 0.1f), 0.0f));
 
     return layout;
 }
 
-apex::AmpParams ApexAmpProcessor::gatherParams()
+NamEngine::Params ApexAmpProcessor::gatherParams()
 {
-    apex::AmpParams p;
+    NamEngine::Params p;
     auto get = [this] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
 
-    p.channel   = (int) get (pid::channel) == 0 ? apex::PreampChannel::tight
-                                                : apex::PreampChannel::scoop;
-    p.tonestack = (apex::TonestackModel) (int) get (pid::tonestack);
-
-    p.inputTrimDb = get (pid::inputTrim);
-    p.gain     = get (pid::gain);
-    p.push     = get (pid::push);
-    p.tight    = get (pid::tight);
-    p.superCut = get (pid::superCut);
-    p.bias     = get (pid::bias);
-
-    p.bass   = get (pid::bass);
-    p.mid    = get (pid::mid);
-    p.treble = get (pid::treble);
-
-    p.chug         = get (pid::chug);
-    p.lowDirtDrive = get (pid::lowDirtDrv);
-    p.lowDirtMix   = get (pid::lowDirtMix);
-
-    p.sag        = get (pid::sag);
-    p.powerDrive = get (pid::powerDrive);
+    p.inputGainDb  = get (pid::inputGain);
+    p.outputGainDb = get (pid::outputGain);
+    p.tightHz      = get (pid::tight);
+    p.boostOn      = get (pid::boostOn) > 0.5f;
+    p.boostDrive   = get (pid::boostDrive) * 0.01f;
+    p.boostTone    = get (pid::boostTone) * 0.01f;
+    p.boostLevelDb = get (pid::boostLevel);
+    p.rigMode      = ((int) get (pid::rigMode) == 1) ? NamEngine::RigMode::Blend
+                                                     : NamEngine::RigMode::Single;
+    p.singleIndex  = (int) get (pid::rig);
+    p.mix[0]       = get (pid::mixBite);
+    p.mix[1]       = get (pid::mixBody);
+    p.mix[2]       = get (pid::mixEdge);
+    p.cabMix       = juce::jlimit (0.0f, 1.0f, get (pid::cabMix) * 0.01f);
+    p.irIndex      = (int) get (pid::ir);
+    p.gateEnabled  = get (pid::gateOn) > 0.5f;
+    p.gateThreshDb = get (pid::gate);
+    p.gateHoldMs   = get (pid::gateHold);
+    p.lowCutHz     = get (pid::lowCut);
+    p.presenceDb   = get (pid::presence);
 
     return p;
 }
@@ -131,15 +154,40 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 
     const int totalIn  = getTotalNumInputChannels();
     const int totalOut = getTotalNumOutputChannels();
+
+    // Clear any output-only channels.
     for (int ch = totalIn; ch < totalOut; ++ch)
         buffer.clear (ch, 0, buffer.getNumSamples());
 
-    engine.setParams (gatherParams());
-    engine.setCabEnabled (apvts.getRawParameterValue (pid::cabOn)->load() > 0.5f);
-    engine.setMasterGainDb (apvts.getRawParameterValue (pid::master)->load());
+    const int n = buffer.getNumSamples();
 
-    juce::dsp::AudioBlock<float> block (buffer);
-    engine.process (block);
+    // Input level (pre-engine).
+    float inMag = 0.0f;
+    for (int ch = 0; ch < juce::jmin (totalIn, buffer.getNumChannels()); ++ch)
+        inMag = juce::jmax (inMag, buffer.getMagnitude (ch, 0, n));
+    inputMagnitude.store (inMag);
+
+    if (bypassParam == nullptr || ! bypassParam->get())
+        engine.process (buffer, gatherParams());
+
+    // Output level (post-engine).
+    float outMag = 0.0f;
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+        outMag = juce::jmax (outMag, buffer.getMagnitude (ch, 0, n));
+    outputMagnitude.store (outMag);
+
+    // Feed the spectrum scope (mono sum of the output).
+    if (buffer.getNumChannels() > 0)
+    {
+        const int chs = buffer.getNumChannels();
+        for (int i = 0; i < n; ++i)
+        {
+            float s = 0.0f;
+            for (int ch = 0; ch < chs; ++ch)
+                s += buffer.getReadPointer (ch)[i];
+            pushScopeSample (s / (float) chs);
+        }
+    }
 }
 
 juce::AudioProcessorEditor* ApexAmpProcessor::createEditor()

@@ -4,6 +4,10 @@
 
 namespace apex
 {
+// Portable pi constant. MSVC does not define M_PI unless _USE_MATH_DEFINES is
+// set before <cmath>, so we define our own to keep the DSP cross-platform.
+inline constexpr double kPi = 3.14159265358979323846;
+
 /**
     Transposed Direct Form II biquad. Pure C++ (no JUCE) so it can be unit-tested
     and reused inside oversampled blocks without allocation.
@@ -63,7 +67,7 @@ private:
         if (q <= 0.0001)   q = 0.0001;
 
         const double A     = std::pow (10.0, gainDb / 40.0);
-        const double w0    = 2.0 * M_PI * freq / fs;
+        const double w0    = 2.0 * kPi * freq / fs;
         const double cosw0 = std::cos (w0);
         const double sinw0 = std::sin (w0);
         const double alpha = sinw0 / (2.0 * q);
@@ -124,7 +128,7 @@ class DCBlocker
 public:
     void setCutoff (double fs, double freq) noexcept
     {
-        R = float (1.0 - (2.0 * M_PI * freq / fs));
+        R = float (1.0 - (2.0 * kPi * freq / fs));
     }
     void reset() noexcept { x1 = y1 = 0.0f; }
 
