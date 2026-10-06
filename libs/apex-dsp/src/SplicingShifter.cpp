@@ -241,7 +241,14 @@ void SplicingShifter::maybeStartSplice() noexcept
 void SplicingShifter::catchUpToAttack() noexcept
 {
     pendingCatchUp = false;
-    const double target = (double) (minimumDelay() + attackCushion);
+
+    // Downshift: the new head reads slower than real time, so it is placed only
+    // a crossfade's worth of content (plus a small cushion for the detector's
+    // lag) before the attack; the attack then arrives as the fade completes.
+    // Upshift: the head must stay a full minimum delay behind the write head.
+    const double target = ratio < 1.0f
+        ? (double) attackCushion + (double) crossfadeLength * ratio
+        : (double) (minimumDelay() + attackCushion);
     if (delay <= target + (double) attackCushion)
         return;
 
@@ -281,6 +288,7 @@ void SplicingShifter::process (float* const* io, int numChannels, int numSamples
         {
             sinceAttack = 0;
             pendingCatchUp = true;
+            formant.notifyAttack();
         }
 
         const double position = (double) writeIndex - delay;

@@ -46,7 +46,7 @@ Drop tuning without the "pitch-shifted" sound. Two engines share one set of cont
 
 | Mode | Engine | Latency (48 kHz) | Use it for |
 |---|---|---|---|
-| **Live** | Time-domain, splices chosen by correlation, attack catch-up | attacks land ~8–14 ms after the input | playing through it while tracking |
+| **Live** | Time-domain, splices chosen by correlation, attack catch-up | attacks land ~9–13 ms after the input | playing through it while tracking |
 | **Studio** | Phase vocoder that moves spectral peaks with phase locking, phase reset on pick attacks | 85 ms, reported to the host and compensated | re-amping, mixing, bouncing |
 
 **Body** keeps the guitar's pickup / body resonances where they are while the strings drop,

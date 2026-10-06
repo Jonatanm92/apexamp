@@ -15,6 +15,7 @@ void LpcFormantCorrector::prepare (double sampleRate, int numChannels)
     while ((double) analysisLength < sampleRate * 0.021)
         analysisLength <<= 1;
     hopLength = analysisLength / 4;
+    attackRampStep = (float) hopLength / (float) (0.025 * sampleRate);
 
     constexpr double twoPi = 6.283185307179586476925286766559;
     window.resize ((size_t) analysisLength);
@@ -23,7 +24,8 @@ void LpcFormantCorrector::prepare (double sampleRate, int numChannels)
 
     // Gaussian lag window (~150 Hz bandwidth) so the all-pole fit follows the
     // broad envelope instead of locking onto individual low harmonics.
-    energyCoeff = (float) (1.0 - std::exp (-1.0 / (0.002 * sampleRate)));   // 2 ms
+    peakRelease     = (float) std::exp (-1.0 / (0.01 * sampleRate));            // 10 ms
+    limiterRecovery = (float) (1.0 - std::exp (-1.0 / (0.005 * sampleRate)));   // 5 ms
 
     lagWindow.resize (order + 1);
     for (int i = 0; i <= order; ++i)
@@ -46,7 +48,9 @@ void LpcFormantCorrector::reset() noexcept
     whiten.fill (0.0f);  whitenStep.fill (0.0f);
     colour.fill (0.0f);  colourStep.fill (0.0f);
     gain = 1.0f; gainStep = 0.0f;
-    dryEnergy = wetEnergy = 0.0f;
+    dryPeak = wetPeak = 0.0f;
+    limiterGain = 1.0f;
+    attackRamp = 1.0f;
     for (auto& s : state) { s.whitenB.fill (0.0f); s.colourB.fill (0.0f); }
     writePos = hopCounter = 0;
     atRest = true;
@@ -101,6 +105,20 @@ float LpcFormantCorrector::levinson (const float* oldestFirst, Coefficients& k) 
     return (float) (error / autocorrelation[0]);     // normalised prediction error
 }
 
+void LpcFormantCorrector::notifyAttack() noexcept
+{
+    if (! isActive())
+        return;
+
+    // Re-colouring with the whitening envelope is the identity.
+    colour = whiten;
+    colourStep = whitenStep;
+    gain = 1.0f;
+    gainStep = 0.0f;
+    attackRamp = 0.0f;
+    hopCounter = hopLength - 1;    // refit on the next sample
+}
+
 void LpcFormantCorrector::analyse() noexcept
 {
     // Unroll the circular output history (oldest first) into the source's
@@ -112,11 +130,14 @@ void LpcFormantCorrector::analyse() noexcept
         source[(size_t) n] = outputHistory[(size_t) ((writePos + n) % analysisLength)];
     const float shiftedError = levinson (source.data(), shifted);
 
+    const float effective = amount * attackRamp;
+    attackRamp = std::min (1.0f, attackRamp + attackRampStep);
+
     Coefficients target {};
     float targetError = 1.0f;
     for (int m = 0; m < order; ++m)
     {
-        target[(size_t) m] = shifted[(size_t) m] + amount * (sourceK[(size_t) m] - shifted[(size_t) m]);
+        target[(size_t) m] = shifted[(size_t) m] + effective * (sourceK[(size_t) m] - shifted[(size_t) m]);
         targetError *= 1.0f - target[(size_t) m] * target[(size_t) m];
     }
 
@@ -210,16 +231,15 @@ void LpcFormantCorrector::process (float* frame, int numChannels) noexcept
     }
 
     corrected /= (float) std::max (1, numChannels);
-    dryEnergy += energyCoeff * (shiftedMono * shiftedMono - dryEnergy);
-    wetEnergy += energyCoeff * (corrected * corrected - wetEnergy);
+    dryPeak = std::max (std::abs (shiftedMono), dryPeak * peakRelease);
+    wetPeak = std::max (std::abs (corrected), wetPeak * peakRelease);
 
-    const float limit = 4.0f * dryEnergy + 1.0e-12f;    // +6 dB
-    if (wetEnergy > limit)
-    {
-        const float scale = std::sqrt (limit / wetEnergy);
-        for (int ch = 0; ch < numChannels; ++ch)
-            frame[ch] *= scale;
-    }
+    // Instant attack, 5 ms recovery.
+    const float allowed = std::min (1.0f, 1.5f * dryPeak / std::max (wetPeak, 1.0e-9f));
+    limiterGain = allowed < limiterGain ? allowed : limiterGain + limiterRecovery * (allowed - limiterGain);
+
+    for (int ch = 0; ch < numChannels; ++ch)
+        frame[ch] *= limiterGain;
 }
 
 } // namespace apex::dsp

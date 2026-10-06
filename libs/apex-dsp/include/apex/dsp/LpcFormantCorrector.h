@@ -50,6 +50,10 @@ public:
     /** Filters one frame (frame[ch]) of shifted output in place. */
     void process (float* frame, int numChannels) noexcept;
 
+    /** A pick attack is about to play: let it through uncorrected (the envelope
+        fits have not seen it yet) and fade the correction back in over ~25 ms. */
+    void notifyAttack() noexcept;
+
 private:
     using Coefficients = std::array<float, order>;
 
@@ -58,6 +62,7 @@ private:
 
     int analysisLength = 1024, hopLength = 256, writePos = 0, hopCounter = 0;
     float amount = 0.0f;
+    float attackRamp = 1.0f, attackRampStep = 0.2f;
     bool atRest = true;
     bool previousAmountWasZero = true;
 
@@ -67,9 +72,9 @@ private:
     Coefficients whiten {}, whitenStep {}, colour {}, colourStep {};
     float gain = 1.0f, gainStep = 0.0f;
 
-    // Safety: the corrected signal may never get more than +6 dB louder than
-    // the uncorrected one (envelope mismatch at note changes, DC, noise).
-    float dryEnergy = 0.0f, wetEnergy = 0.0f, energyCoeff = 0.01f;
+    // Safety net: the corrected signal's peak envelope may not exceed the
+    // uncorrected one's by more than ~3.5 dB.
+    float dryPeak = 0.0f, wetPeak = 0.0f, peakRelease = 0.999f, limiterGain = 1.0f, limiterRecovery = 0.01f;
 
     struct LatticeState { std::array<float, order> whitenB {}, colourB {}; };
     std::array<LatticeState, maxChannels> state {};
