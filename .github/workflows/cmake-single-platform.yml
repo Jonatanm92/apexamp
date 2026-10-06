@@ -1,4 +1,4 @@
-name: Build ApexAmp
+name: Build Apex suite
 
 on:
   push:
@@ -68,20 +68,33 @@ jobs:
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
 
-      # Regression guard: load the 3 NAM rigs and confirm they produce audio.
-      # Fails the build if the linker ever strips the architecture registrations
-      # again (which would ship a silent plugin).
-      - name: Verify NAM rigs produce audio
+      # Regression guards:
+      #  - rig_audio / resample_streaming: the 3 NAM rigs load and make sound
+      #    (catches the linker stripping the architecture registrations, which
+      #    would ship a silent plugin).
+      #  - pitch_engine: Apex Drop's pitch engine (null, latency, pitch accuracy,
+      #    formants, stability).
+      - name: Run tests
         run: ctest --test-dir build -C ${{ env.BUILD_TYPE }} --output-on-failure
 
-      # Upload the finished plugin so you can download it from the run page
+      # Upload the finished plugins so you can download them from the run page
       # (Actions tab -> this run -> Artifacts) without compiling locally.
-      - name: Upload plugin
+      - name: Upload ApexAmp
         uses: actions/upload-artifact@v4
         with:
           name: ApexAmp-${{ matrix.name }}
           if-no-files-found: warn
           path: |
-            build/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/VST3/**
-            build/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/AU/**
-            build/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/Standalone/**
+            build/plugins/ApexAmp/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/VST3/**
+            build/plugins/ApexAmp/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/AU/**
+            build/plugins/ApexAmp/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/Standalone/**
+
+      - name: Upload Apex Drop
+        uses: actions/upload-artifact@v4
+        with:
+          name: ApexDrop-${{ matrix.name }}
+          if-no-files-found: warn
+          path: |
+            build/plugins/ApexDrop/ApexDrop_artefacts/${{ env.BUILD_TYPE }}/VST3/**
+            build/plugins/ApexDrop/ApexDrop_artefacts/${{ env.BUILD_TYPE }}/AU/**
+            build/plugins/ApexDrop/ApexDrop_artefacts/${{ env.BUILD_TYPE }}/Standalone/**

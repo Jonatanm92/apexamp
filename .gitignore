@@ -1,6 +1,8 @@
 # Build output
 build/
 build_*/
+build-*/
+listening/
 cmake-build-*/
 out_*.wav
 
