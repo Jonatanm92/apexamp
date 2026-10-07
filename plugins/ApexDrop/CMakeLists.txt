@@ -16,8 +16,13 @@ juce_add_plugin(ApexDrop
 
 juce_generate_juce_header(ApexDrop)
 
-target_sources(ApexDrop PRIVATE
-    Source/DropProcessor.cpp)
+set(APEXDROP_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/Source/DropProcessor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Source/DropEditor.cpp)
+set(APEXDROP_SOURCES ${APEXDROP_SOURCES} PARENT_SCOPE)
+set(APEXDROP_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Source PARENT_SCOPE)
+
+target_sources(ApexDrop PRIVATE ${APEXDROP_SOURCES})
 
 target_include_directories(ApexDrop PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source)
@@ -30,6 +35,7 @@ target_compile_definitions(ApexDrop PUBLIC
 
 target_link_libraries(ApexDrop PRIVATE
     apex_dsp
+    apex_ui
     juce::juce_audio_utils
     PUBLIC
     juce::juce_recommended_config_flags)

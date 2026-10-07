@@ -44,9 +44,13 @@ target_include_directories(nam_core PUBLIC
     ${NAM_DIR}/Dependencies/nlohmann)
 set_target_properties(nam_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-target_sources(ApexAmp PRIVATE
-    Source/PluginProcessor.cpp
-    Source/ApexEditor.cpp)
+set(APEXAMP_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/Source/PluginProcessor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Source/AmpEditor.cpp)
+set(APEXAMP_SOURCES ${APEXAMP_SOURCES} PARENT_SCOPE)
+set(APEXAMP_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Source PARENT_SCOPE)
+
+target_sources(ApexAmp PRIVATE ${APEXAMP_SOURCES})
 
 target_include_directories(ApexAmp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source)
@@ -62,6 +66,8 @@ target_compile_features(ApexAmp PRIVATE cxx_std_20)
 
 target_link_libraries(ApexAmp PRIVATE
     ApexAmpAssets
+    apex_dsp
+    apex_ui
     $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_core>
     juce::juce_audio_utils
     juce::juce_dsp

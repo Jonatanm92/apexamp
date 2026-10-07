@@ -14,6 +14,7 @@
 
 #include "NAM/get_dsp.h"
 #include "BinaryData.h"
+#include "apex/dsp/PitchShifter.h"
 
 /**
  * NamEngine
@@ -23,7 +24,11 @@
  * in the binary. It can either:
  *   - SINGLE mode: run one rig on its own, or
  *   - BLEND mode : sum all three loudness-matched rigs (layered tone).
- * After the amp stage the signal passes through the selected cabinet IR.
+ * After the amp stage the signal passes through the amp EQ (Bass / Mid /
+ * Treble, flat at 0 dB) and the selected cabinet IR.
+ *
+ * In front of the amp sits the Drop pedal: apex-dsp's Live pitch engine
+ * (formant-correct "Body") plus an optional sub-octave layer.
  *
  * All NAM I/O is double precision (NAM_SAMPLE == double); JUCE buffers are
  * float, so we convert at the boundary. NAM rigs were trained at 48 kHz; for
@@ -54,6 +59,13 @@ public:
         float   gateHoldMs   = 50.0f;      // hold open after last transient
         float   lowCutHz     = 80.0f;      // output high-pass to tame sub-bass
         float   presenceDb   = 0.0f;       // high shelf post-cab (-12..+12 dB)
+        bool    dropOn       = false;      // Drop pedal (pitch shift in front of the amp)
+        float   dropShift    = -5.0f;      // semitones
+        float   dropBody     = 1.0f;       // 0..1 formant preservation
+        float   dropSub      = 0.0f;       // 0..1 sub-octave layer level
+        float   bassDb       = 0.0f;       // amp EQ, flat at 0 dB
+        float   midDb        = 0.0f;
+        float   trebleDb     = 0.0f;
     };
 
     NamEngine() = default;
@@ -143,6 +155,25 @@ public:
         cabMixSmoothed.reset (sampleRate, 0.02); // 20 ms ramp = click-free
         cabMixSmoothed.setCurrentAndTargetValue (1.0f);
 
+        // Drop pedal: main shifter + sub-octave layer (Live engine, mono).
+        dropMain.prepare (sampleRate, maxBlockSize, 1);
+        dropSubShifter.prepare (sampleRate, maxBlockSize, 1);
+        dropMain.setMode (apex::dsp::PitchMode::live);
+        dropSubShifter.setMode (apex::dsp::PitchMode::live);
+        dropIn.assign  ((size_t) maxBlockSize, 0.0f);
+        dropDry.assign ((size_t) maxBlockSize, 0.0f);
+        dropSubBuf.assign ((size_t) maxBlockSize, 0.0f);
+        dropGain.reset (sampleRate, 0.012);
+        dropGain.setCurrentAndTargetValue (0.0f);
+        subLevel.reset (sampleRate, 0.03);
+        subLevel.setCurrentAndTargetValue (0.0f);
+        dropWasActive = false;
+        subLowpass.setLowpass (sampleRate, 240.0);
+        subLowpass.reset();
+
+        ampEq[0].reset(); ampEq[1].reset(); ampEq[2].reset();
+        lastEq[0] = lastEq[1] = lastEq[2] = 1.0e9f;
+
         // Gate / filter state
         gateGain = 1.0f;
         gateOpen = true;
@@ -177,9 +208,16 @@ public:
         gateHoldCounter = 0;
         tightLp1 = tightLp2 = 0.0;
         screamer.reset();
+        dropMain.reset();
+        dropSubShifter.reset();
+        subLowpass.reset();
+        ampEq[0].reset(); ampEq[1].reset(); ampEq[2].reset();
     }
 
     int getLatencySamples() const noexcept { return latencySamples; }
+
+    /** Extra latency while the Drop pedal is on (Live engine, reported to the host). */
+    int getDropLatencySamples() const noexcept { return dropMain.getLatencySamples(); }
 
     //==============================================================================
     // Load a user cabinet IR from a file (message thread). Returns true on success.
@@ -289,11 +327,17 @@ public:
 
         for (int i = 0; i < n; ++i)
         {
-            double sum = 0.0;
+            float sum = 0.0f;
             for (int ch = 0; ch < numChannels; ++ch)
-                sum += (double) buffer.getReadPointer (ch)[i];
-            sum /= (double) numChannels;
-            sum *= inGain;
+                sum += buffer.getReadPointer (ch)[i];
+            dropIn[(size_t) i] = sum / (float) numChannels * (float) inGain;
+        }
+
+        processDrop (p, n);
+
+        for (int i = 0; i < n; ++i)
+        {
+            double sum = (double) dropIn[(size_t) i];
 
             if (tightOn)
             {
@@ -370,6 +414,11 @@ public:
             if (take > 0)
                 hostOutFifo.erase (hostOutFifo.begin(), hostOutFifo.begin() + take);
         }
+
+        // ---- 2.5) Amp EQ (Bass / Mid / Treble; exactly flat at 0 dB) ----------
+        updateEqCoeffs (p);
+        for (auto& band : ampEq)
+            band.process (mixBuf.data(), n);
 
         // ---- 3) Write mono result back to all channels (float) -----------------
         for (int ch = 0; ch < numChannels; ++ch)
@@ -552,6 +601,122 @@ private:
     };
 
     static constexpr int kPrime = 32; // output FIFO priming = resampler latency
+
+    //==============================================================================
+    // RBJ biquad, transposed direct form II, double precision (mono).
+    struct Biquad
+    {
+        double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0;
+        void reset() { z1 = z2 = 0.0; }
+
+        void set (double nb0, double nb1, double nb2, double na0, double na1, double na2)
+        {
+            b0 = nb0 / na0; b1 = nb1 / na0; b2 = nb2 / na0; a1 = na1 / na0; a2 = na2 / na0;
+        }
+
+        void setLowpass (double sr, double f)
+        {
+            const double w = 2.0 * juce::MathConstants<double>::pi * f / sr, c = std::cos (w), al = std::sin (w) / (2.0 * 0.7071);
+            set ((1.0 - c) * 0.5, 1.0 - c, (1.0 - c) * 0.5, 1.0 + al, -2.0 * c, 1.0 - al);
+        }
+
+        void setShelf (double sr, double f, double db, bool high)
+        {
+            const double A = std::pow (10.0, db / 40.0), w = 2.0 * juce::MathConstants<double>::pi * f / sr;
+            const double c = std::cos (w), al = std::sin (w) / 2.0 * std::sqrt (2.0), sa = 2.0 * std::sqrt (A) * al;
+            if (high)
+                set (A * ((A + 1.0) + (A - 1.0) * c + sa), -2.0 * A * ((A - 1.0) + (A + 1.0) * c), A * ((A + 1.0) + (A - 1.0) * c - sa),
+                     (A + 1.0) - (A - 1.0) * c + sa, 2.0 * ((A - 1.0) - (A + 1.0) * c), (A + 1.0) - (A - 1.0) * c - sa);
+            else
+                set (A * ((A + 1.0) - (A - 1.0) * c + sa), 2.0 * A * ((A - 1.0) - (A + 1.0) * c), A * ((A + 1.0) - (A - 1.0) * c - sa),
+                     (A + 1.0) + (A - 1.0) * c + sa, -2.0 * ((A - 1.0) + (A + 1.0) * c), (A + 1.0) + (A - 1.0) * c - sa);
+        }
+
+        void setPeak (double sr, double f, double q, double db)
+        {
+            const double A = std::pow (10.0, db / 40.0), w = 2.0 * juce::MathConstants<double>::pi * f / sr;
+            const double c = std::cos (w), al = std::sin (w) / (2.0 * q);
+            set (1.0 + al * A, -2.0 * c, 1.0 - al * A, 1.0 + al / A, -2.0 * c, 1.0 - al / A);
+        }
+
+        void process (double* x, int n)
+        {
+            for (int i = 0; i < n; ++i)
+            {
+                const double y = b0 * x[i] + z1;
+                z1 = b1 * x[i] - a1 * y + z2;
+                z2 = b2 * x[i] - a2 * y;
+                x[i] = y;
+            }
+        }
+
+        float processSample (float x)
+        {
+            const double y = b0 * x + z1;
+            z1 = b1 * x - a1 * y + z2;
+            z2 = b2 * x - a2 * y;
+            return (float) y;
+        }
+    };
+
+    void updateEqCoeffs (const Params& p)
+    {
+        const float gains[3] = { p.bassDb, p.midDb, p.trebleDb };
+        for (int b = 0; b < 3; ++b)
+        {
+            if (std::abs (gains[b] - lastEq[b]) < 0.005f)
+                continue;
+            lastEq[b] = gains[b];
+            if (b == 0)      ampEq[0].setShelf (sampleRate, 110.0, gains[0], false);
+            else if (b == 1) ampEq[1].setPeak (sampleRate, 700.0, 0.8, gains[1]);
+            else             ampEq[2].setShelf (sampleRate, 2600.0, gains[2], true);
+        }
+    }
+
+    // Drop pedal on the mono, gain-staged DI in dropIn[0..n).
+    void processDrop (const Params& p, int n)
+    {
+        dropGain.setTargetValue (p.dropOn ? 1.0f : 0.0f);
+        const bool active = p.dropOn || dropGain.isSmoothing();
+        if (! active)
+        {
+            dropWasActive = false;
+            return;
+        }
+        if (! dropWasActive)
+        {
+            // Fresh buffers: no stale audio from the last time the pedal was on.
+            dropMain.reset();
+            dropSubShifter.reset();
+            subLowpass.reset();
+            dropWasActive = true;
+        }
+
+        std::copy (dropIn.begin(), dropIn.begin() + n, dropDry.begin());
+
+        dropMain.setSemitones (p.dropShift);
+        dropMain.setBody (p.dropBody);
+        float* mainPtr[1] = { dropIn.data() };
+        dropMain.process (mainPtr, 1, n);
+
+        subLevel.setTargetValue (p.dropSub);
+        if (p.dropSub > 0.0f || subLevel.isSmoothing())
+        {
+            std::copy (dropDry.begin(), dropDry.begin() + n, dropSubBuf.begin());
+            dropSubShifter.setSemitones (p.dropShift - 12.0f);
+            dropSubShifter.setBody (p.dropBody);
+            float* subPtr[1] = { dropSubBuf.data() };
+            dropSubShifter.process (subPtr, 1, n);
+            for (int i = 0; i < n; ++i)
+                dropIn[(size_t) i] += subLowpass.processSample (dropSubBuf[(size_t) i]) * subLevel.getNextValue() * 1.4f;
+        }
+
+        for (int i = 0; i < n; ++i)
+        {
+            const float g = dropGain.getNextValue();
+            dropIn[(size_t) i] = dropDry[(size_t) i] * (1.0f - g) + dropIn[(size_t) i] * g;
+        }
+    }
 
     //==============================================================================
     // Tube-screamer-style boost: tighten lows, soft asymmetric clip (mid focus),
@@ -809,4 +974,15 @@ private:
 
     double tightLp1 = 0.0, tightLp2 = 0.0; // pre-amp high-pass state
     Screamer screamer;
+
+    // Drop pedal
+    apex::dsp::PitchShifter dropMain, dropSubShifter;
+    std::vector<float> dropIn, dropDry, dropSubBuf;
+    juce::SmoothedValue<float> dropGain, subLevel;
+    bool dropWasActive = false;
+    Biquad subLowpass;
+
+    // Amp EQ: bass shelf, mid peak, treble shelf
+    Biquad ampEq[3];
+    float lastEq[3] { 1.0e9f, 1.0e9f, 1.0e9f };
 };

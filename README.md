@@ -4,13 +4,15 @@ One repository for the Apex plugin suite and the DSP the plugins share.
 
 | | What it is | Status |
 |---|---|---|
-| [**ApexAmp**](plugins/ApexAmp/README.md) | NAM-powered high-gain amp: Bite / Body / Edge rigs, Screamer boost, gate, cab IRs | beta |
-| [**Apex Drop**](#apex-drop) | Drop-tuning pitch shifter: Live (play through it) and Studio (mix quality) engines, formant-correct "Body" | v0.1, generic UI |
+| [**ApexAmp**](plugins/ApexAmp/README.md) | NAM-powered high-gain rig: head on a 4x12, pedalboard with Drop (pitch + sub), Gate, Boost and Cab, amp EQ, strobe tuner | beta |
+| [**Apex Drop**](#apex-drop) | Drop-tuning pitch shifter: Live (play through it) and Studio (mix quality) engines, formant-correct "Body", sub-octave | v0.2 |
 | [**apex-dsp**](libs/apex-dsp/README.md) | Framework-free C++ DSP shared by the plugins, with offline tests and tools | — |
+| [**apex-ui**](#design-system-apex-ui) | The shared design system: rendered hardware controls, header, presets, A/B, undo, tuner | — |
 
 ```
 CMakeLists.txt          # suite: apex-dsp + every plugin, JUCE via FetchContent
 libs/apex-dsp/          # pure C++ DSP (no JUCE): pitch engine, tests, render tool
+libs/apex-ui/           # design system (JUCE): materials, controls, editor frame, fonts (OFL)
 plugins/ApexAmp/        # amp plugin (Source/, assets/, tools/)
 plugins/ApexDrop/       # pitch shifter plugin (thin wrapper around apex-dsp)
 third_party/            # NeuralAmpModelerCore
@@ -54,12 +56,29 @@ which is what a really down-tuned guitar does. At 0 % the resonances move with t
 classic shifter sound). Put Apex Drop **before** the amp: shift the clean DI, never the
 distorted signal.
 
-Controls: Shift (±24 st) · Fine (±100 ct) · Mode · Body · Mix (latency-aligned dry) · Output.
-Bypass fades to the aligned dry signal so the host's delay compensation never breaks.
+Controls: Shift (±24 st) · Fine (±100 ct) · Live / Studio · Body · Sub (octave-down layer) ·
+Mix (latency-aligned dry) · Output, plus a stomp switch for bypass. Bypass fades to the aligned
+dry signal so the host's delay compensation never breaks. The same engine sits in ApexAmp as
+the Drop pedal. Measured results: [libs/apex-dsp/README.md](libs/apex-dsp/README.md).
 
-The editor is JUCE's generic one for now; the Apex design system (Monolith) replaces it once
-the mockups are signed off. Measured results and how they are measured:
-[libs/apex-dsp/README.md](libs/apex-dsp/README.md).
+## Design system (apex-ui)
+
+Every Apex editor is built from `libs/apex-ui`:
+
+- **Materials** shaded per pixel with one key light (spun-aluminium knob caps, knurled skirts,
+  chrome footswitches, bat toggles, LEDs, pilot jewel, tolex, brushed metal, grille cloth,
+  seven-segment LEDs) and cached at the screen's physical resolution, so they stay sharp at
+  any size and cost one image blit per repaint.
+- **Controls**: knobs (drag, Shift for fine, wheel, double-click resets, arrow keys, value
+  bubble), footswitches, rotary selector, displays, meters.
+- **Editor frame**: preset browser (factory + user presets, modified marker, save), A/B
+  compare, undo / redo (Cmd/Ctrl-Z), input / output meters, strobe tuner with output mute, and
+  a resizable window (60–200 %, remembered per instance).
+- **Fonts**: Barlow Condensed, Big Shoulders Display, JetBrains Mono (SIL OFL 1.1, embedded).
+
+Headless screenshots for UI review: configure with `-DAPEX_BUILD_SNAPSHOTS=ON`, then
+`xvfb-run build/tools/snapshot/apexamp_snapshot_artefacts/Release/apexamp_snapshot amp.png 2 --preset 8`
+(also `apexdrop_snapshot`, `--set id=value`, `--tuner`).
 
 ## Selling
 

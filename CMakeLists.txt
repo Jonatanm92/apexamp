@@ -43,6 +43,12 @@ if(APEX_BUILD_PLUGINS)
         endif()
     endfunction()
 
+    add_subdirectory(libs/apex-ui)
     add_subdirectory(plugins/ApexAmp)
     add_subdirectory(plugins/ApexDrop)
+
+    option(APEX_BUILD_SNAPSHOTS "Build the headless UI screenshot tools" OFF)
+    if(APEX_BUILD_SNAPSHOTS)
+        add_subdirectory(tools/snapshot)
+    endif()
 endif()

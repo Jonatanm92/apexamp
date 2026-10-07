@@ -97,7 +97,21 @@ listen, repeat.
 
 ---
 
-## Controls
+## v0.6: the rig
+
+The editor is now a full rig built from the Apex design system: the head sits on a 4x12 and a
+pedalboard runs in front of it.
+
+- **Drop** (new): apex-dsp's Live pitch engine in front of the amp, -12..+12 semitones with a
+  seven-segment display, **Body** (keeps the pickup / body resonances where a real drop tuning
+  keeps them) and **Sub** (octave-down layer). Adds ~8 ms latency while on, reported to the host.
+- **Amp EQ** (new): Bass (110 Hz shelf), Mid (700 Hz), Treble (2.6 kHz shelf). Flat at 0 dB, so
+  sessions and presets from earlier versions sound identical.
+- **Rig selector**: Bite / Body / Edge / Blend (with blend trims) / User (.nam).
+- **Gate, Boost, Cab** (IR browser + load) as pedals; **Power** toggle with pilot jewel.
+- **Strobe tuner** with output mute, presets (factory + user), A/B, undo / redo, resizable UI.
+
+## Controls (legacy section)
 
 **Presets:** factory preset menu (Chug Machine, Djent Tight, Modern Lead, Tight Rhythm, Clean…) plus **Save/Load** for your own `.apreset` files (parameters *and* the loaded IR path are saved).
 **Preamp:** Channel (Tight/Scoop) · Input · Gain · Push · Tight · Super Cut · Bias
