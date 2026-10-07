@@ -332,7 +332,7 @@ namespace materials
                 for (int x = 0; x < w; ++x)
                     n[(size_t) (y * w + x)] = n[(size_t) (y * w + x)] * 1.0f + rows[(size_t) y] * 0.35f;
             normalise (n);
-            cache->brushed = detailImage (n, w, h, 0.45f);
+            cache->brushed = detailImage (n, w, h, 0.15f);
         }
         return cache->brushed;
     }
@@ -362,7 +362,7 @@ namespace materials
                     shade[(size_t) (y * w + x)] = -(gx + gy);
                 }
             normalise (shade);
-            cache->tolex = detailImage (shade, w, h, 0.5f);
+            cache->tolex = detailImage (shade, w, h, 0.2f);
         }
         return cache->tolex;
     }
@@ -376,7 +376,7 @@ namespace materials
             auto n = whiteNoise (w, h, 41);
             boxBlur (n, w, h, 1, 1);
             normalise (n);
-            cache->powder = detailImage (n, w, h, 0.35f);
+            cache->powder = detailImage (n, w, h, 0.22f);
         }
         return cache->powder;
     }
@@ -950,7 +950,10 @@ namespace draw
         const juce::Graphics::ScopedSaveState saved (g);
         g.setColour (base);
         g.fillPath (shape);
-        juce::FillType ft (texture, juce::AffineTransform::scale (textureScale));
+        // Grain is defined in physical pixels: finer (more real) on high-DPI
+        // screens instead of getting blown up with the UI scale.
+        const float phys = physicalScale (g);
+        juce::FillType ft (texture, juce::AffineTransform::scale (textureScale / phys));
         ft.setOpacity (opacity);
         g.setFillType (ft);
         g.fillPath (shape);

@@ -126,8 +126,9 @@ juce::Rectangle<float> pedalEnclosure (juce::Graphics& g, juce::Rectangle<float>
     // metallic flake
     {
         const juce::Graphics::ScopedSaveState s2 (g);
-        juce::FillType ft (materials::powderGrain(), juce::AffineTransform::scale (0.4f));
-        ft.setOpacity (0.38f);
+        const float phys = juce::jmax (0.25f, g.getInternalContext().getPhysicalPixelScaleFactor());
+        juce::FillType ft (materials::powderGrain(), juce::AffineTransform::scale (0.5f / phys));
+        ft.setOpacity (0.26f);
         g.setFillType (ft);
         g.fillPath (face);
     }
@@ -195,7 +196,7 @@ juce::Rectangle<float> ampHead (juce::Graphics& g, juce::Rectangle<float> b)
     const float r = 16.0f;
     juce::Path shell;
     shell.addRoundedRectangle (box, r);
-    texturedFill (g, shell, colours::tolex, materials::tolexGrain(), 0.55f, 0.6f);
+    texturedFill (g, shell, colours::tolex, materials::tolexGrain(), 0.45f, 0.7f);
     juce::ColourGradient form (juce::Colours::white.withAlpha (0.07f), box.getX(), box.getY(),
                                juce::Colours::black.withAlpha (0.35f), box.getX(), box.getBottom(), false);
     g.setGradientFill (form);
@@ -253,7 +254,7 @@ juce::Rectangle<float> speakerCab (juce::Graphics& g, juce::Rectangle<float> b)
     const float r = 16.0f;
     juce::Path shell;
     shell.addRoundedRectangle (b, r);
-    texturedFill (g, shell, colours::tolex, materials::tolexGrain(), 0.55f, 0.6f);
+    texturedFill (g, shell, colours::tolex, materials::tolexGrain(), 0.45f, 0.7f);
     g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.05f), b.getX(), b.getY(),
                                              juce::Colours::black.withAlpha (0.5f), b.getX(), b.getY() + b.getHeight() * 0.6f, false));
     g.fillPath (shell);
@@ -261,7 +262,7 @@ juce::Rectangle<float> speakerCab (juce::Graphics& g, juce::Rectangle<float> b)
     const auto grille = b.reduced (38.0f, 34.0f);
     juce::Path cloth;
     cloth.addRoundedRectangle (grille, 6.0f);
-    texturedFill (g, cloth, juce::Colour (0xff0e0e10), materials::grilleCloth(), 0.6f, 0.5f);
+    texturedFill (g, cloth, juce::Colour (0xff0e0e10), materials::grilleCloth(), 0.6f, 0.6f);
     // four 12" speakers faintly visible through the cloth
     {
         const juce::Graphics::ScopedSaveState s2 (g);
@@ -307,7 +308,7 @@ void faceplate (juce::Graphics& g, juce::Rectangle<float> a)
     const juce::Graphics::ScopedSaveState saved (g);
     juce::Path plate;
     plate.addRoundedRectangle (a, 5.0f);
-    texturedFill (g, plate, colours::faceplate, materials::brushedMetal(), 0.55f, 1.0f);
+    texturedFill (g, plate, colours::faceplate, materials::brushedMetal(), 0.5f, 1.0f);
 
     // broad horizontal light falloff + chamfer
     g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.06f), a.getX(), a.getY(),
