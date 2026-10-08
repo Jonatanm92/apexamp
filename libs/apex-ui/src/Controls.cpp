@@ -87,6 +87,13 @@ HardwareButton::HardwareButton (Glyph gl) : juce::Button ("Button"), glyph (gl)
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
+HardwareButton::HardwareButton (const juce::String& text)
+    : juce::Button (text), glyph (Glyph::text), legend (text)
+{
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+    setClickingTogglesState (true);
+}
+
 void HardwareButton::paintButton (juce::Graphics& g, bool over, bool down)
 {
     auto b = getLocalBounds().toFloat().reduced (1.5f);
@@ -101,6 +108,22 @@ void HardwareButton::paintButton (juce::Graphics& g, bool over, bool down)
     g.drawRoundedRectangle (b.reduced (0.5f), r, 1.0f);
 
     const auto c = b.getCentre().translated (0.0f, down ? 0.8f : 0.0f);
+    if (glyph == Glyph::text)
+    {
+        const bool lit = getToggleState();
+        const auto area = b.translated (0.0f, down ? 0.8f : 0.0f);
+        g.setFont (Fonts::labelBold (juce::jmin (12.0f, b.getHeight() * 0.48f), 0.22f));
+        if (lit)
+        {
+            g.setColour (colours::amber.withAlpha (0.3f));
+            for (auto o : { juce::Point<float> (-0.8f, 0.0f), { 0.8f, 0.0f }, { 0.0f, -0.8f }, { 0.0f, 0.8f } })
+                g.drawText (legend, area.translated (o.x, o.y), juce::Justification::centred, false);
+        }
+        g.setColour (lit ? colours::amber : (over ? colours::bone : colours::label));
+        g.drawText (legend, area, juce::Justification::centred, false);
+        return;
+    }
+
     const float s = juce::jmin (b.getWidth(), b.getHeight()) * 0.2f;
     juce::Path p;
     switch (glyph)
@@ -113,6 +136,8 @@ void HardwareButton::paintButton (juce::Graphics& g, bool over, bool down)
             p.startNewSubPath (c.x - s, c.y + s * 0.2f); p.lineTo (c.x - s, c.y + s); p.lineTo (c.x + s, c.y + s); p.lineTo (c.x + s, c.y + s * 0.2f);
             p.startNewSubPath (c.x, c.y - s); p.lineTo (c.x, c.y + s * 0.4f);
             p.startNewSubPath (c.x - s * 0.5f, c.y - s * 0.1f); p.lineTo (c.x, c.y + s * 0.4f); p.lineTo (c.x + s * 0.5f, c.y - s * 0.1f);
+            break;
+        case Glyph::text:
             break;
     }
     g.setColour (over ? colours::bone : colours::label);

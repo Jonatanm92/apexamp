@@ -58,16 +58,20 @@ public:
     IconButton undoButton     { IconButton::Icon::undo, "Undo" };
     IconButton redoButton     { IconButton::Icon::redo, "Redo" };
     LevelMeter inMeter, outMeter;
+    juce::TextButton autoButton { "AUTO" };
     IconButton tunerButton    { IconButton::Icon::tuner, "Tuner" };
     IconButton settingsButton { IconButton::Icon::settings, "Settings" };
 
     /** Hide the tuner button for plugins without one. */
     void setShowsTuner (bool shouldShow);
 
+    /** Show the AUTO input-level button next to the meters. */
+    void setShowsAutoInput (bool shouldShow);
+
 private:
     juce::String product;
     juce::Rectangle<int> meterArea;
-    bool showsTuner = true;
+    bool showsTuner = true, showsAutoInput = false;
 };
 
 //==============================================================================

@@ -12,11 +12,15 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 add_library(apex_dsp STATIC
+    src/AbyssReverb.cpp
+    src/ChugShaper.cpp
     src/Fft.cpp
+    src/LowDirt.cpp
     src/LpcFormantCorrector.cpp
     src/PitchShifter.cpp
     src/SpectralShifter.cpp
-    src/SplicingShifter.cpp)
+    src/SplicingShifter.cpp
+    src/StereoDelay.cpp)
 
 target_include_directories(apex_dsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(apex_dsp PUBLIC cxx_std_17)
@@ -33,6 +37,10 @@ if(APEX_DSP_BUILD_TESTS)
     add_executable(apex_pitch_tests tests/pitch_tests.cpp)
     target_link_libraries(apex_pitch_tests PRIVATE apex_dsp)
     add_test(NAME pitch_engine COMMAND apex_pitch_tests)
+
+    add_executable(apex_fx_tests tests/fx_tests.cpp)
+    target_link_libraries(apex_fx_tests PRIVATE apex_dsp)
+    add_test(NAME rig_effects COMMAND apex_fx_tests)
 
     add_executable(apex_pitch_render tests/pitch_render.cpp)
     target_link_libraries(apex_pitch_render PRIVATE apex_dsp)

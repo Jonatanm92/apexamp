@@ -56,16 +56,19 @@ public:
     void paintButton (juce::Graphics&, bool over, bool down) override;
 };
 
-/** Small square hardware push button with a chevron. */
+/** Small hardware push button with a chevron, or a latching one with a
+    printed legend that lights amber while it is on. */
 class HardwareButton : public juce::Button
 {
 public:
-    enum class Glyph { up, down, left, right, load };
+    enum class Glyph { up, down, left, right, load, text };
     explicit HardwareButton (Glyph);
+    explicit HardwareButton (const juce::String& legend);
     void paintButton (juce::Graphics&, bool over, bool down) override;
 
 private:
     Glyph glyph;
+    juce::String legend;
 };
 
 //==============================================================================

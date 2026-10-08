@@ -146,6 +146,17 @@ HeaderBar::HeaderBar (const juce::String& productName) : product (productName)
     bButton.setConnectedEdges (juce::Button::ConnectedOnLeft);
     inMeter.setTitle ("Input level");
     outMeter.setTitle ("Output level");
+
+    addChildComponent (autoButton);
+    autoButton.setClickingTogglesState (false);
+    autoButton.setTooltip ("Auto Input: play for a few seconds and the input level is set for you");
+}
+
+void HeaderBar::setShowsAutoInput (bool shouldShow)
+{
+    showsAutoInput = shouldShow;
+    autoButton.setVisible (shouldShow);
+    resized();
 }
 
 void HeaderBar::setShowsTuner (bool shouldShow)
@@ -204,7 +215,13 @@ void HeaderBar::resized()
     outMeter.setBounds (r - meterW, h / 2 + 3, meterW, 7);
     inMeter.setBounds (r - meterW, h / 2 - 10, meterW, 7);
     meterArea = { r - meterW - 26, 0, meterW + 26, h };
-    const int rightEdge = meterArea.getX() - 12;
+    int rightEdge = meterArea.getX() - 12;
+    if (showsAutoInput)
+    {
+        const int aw = compact ? 46 : 54;
+        autoButton.setBounds (rightEdge - aw, y + 3, aw, bh - 6);
+        rightEdge -= aw + 12;
+    }
 
     // centre group, shrinking the preset box to fit
     const int leftEdge = compact ? 150 : 190;

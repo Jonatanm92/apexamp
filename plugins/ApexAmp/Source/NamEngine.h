@@ -14,7 +14,11 @@
 
 #include "NAM/get_dsp.h"
 #include "BinaryData.h"
+#include "apex/dsp/AbyssReverb.h"
+#include "apex/dsp/ChugShaper.h"
+#include "apex/dsp/LowDirt.h"
 #include "apex/dsp/PitchShifter.h"
+#include "apex/dsp/StereoDelay.h"
 
 /**
  * NamEngine
@@ -25,7 +29,9 @@
  *   - SINGLE mode: run one rig on its own, or
  *   - BLEND mode : sum all three loudness-matched rigs (layered tone).
  * After the amp stage the signal passes through the amp EQ (Bass / Mid /
- * Treble, flat at 0 dB) and the selected cabinet IR.
+ * Treble, flat at 0 dB), the Shape pedal (Chug + Low Dirt) and the selected
+ * cabinet IR, then the stereo Void unit (Echo delay and Abyss reverb, both
+ * with spillover).
  *
  * In front of the amp sits the Drop pedal: apex-dsp's Live pitch engine
  * (formant-correct "Body") plus an optional sub-octave layer.
@@ -43,6 +49,7 @@ public:
     struct Params
     {
         float   inputGainDb  = 0.0f;
+        float   inputTrimDb  = 0.0f;       // Auto Input calibration
         float   outputGainDb = 0.0f;
         float   tightHz      = 20.0f;      // pre-amp high-pass (20 = off)
         bool    boostOn      = false;      // Screamer boost in front of the amp
@@ -66,6 +73,20 @@ public:
         float   bassDb       = 0.0f;       // amp EQ, flat at 0 dB
         float   midDb        = 0.0f;
         float   trebleDb     = 0.0f;
+        bool    shapeOn      = false;      // Shape pedal: Chug + Low Dirt
+        float   chug         = 0.5f;       // 0..1
+        float   chugFreqHz   = 700.0f;
+        float   dirt         = 0.25f;      // 0..1
+        bool    delayOn      = false;      // Void: Echo
+        double  delayMs      = 375.0;
+        float   delayFeedback = 0.35f;     // 0..1
+        float   delayDuck    = 0.0f;       // 0..1
+        float   delayMix     = 0.3f;       // 0..1
+        bool    reverbOn     = false;      // Void: Abyss
+        float   reverbDecay  = 3.5f;       // seconds
+        float   reverbAbyss  = 0.25f;      // 0..1
+        float   reverbTone   = 0.5f;       // 0..1
+        float   reverbMix    = 0.25f;      // 0..1
     };
 
     NamEngine() = default;
@@ -174,6 +195,15 @@ public:
         ampEq[0].reset(); ampEq[1].reset(); ampEq[2].reset();
         lastEq[0] = lastEq[1] = lastEq[2] = 1.0e9f;
 
+        // Shape pedal and the Void unit
+        chugShaper.prepare (sampleRate, maxBlockSize);
+        chugShaper.setDetectorDelay (latencySamples);
+        lowDirt.prepare (sampleRate);
+        shapeDi.assign ((size_t) maxBlockSize, 0.0f);
+        shapeBuf.assign ((size_t) maxBlockSize, 0.0f);
+        echo.prepare (sampleRate, maxBlockSize);
+        abyss.prepare (sampleRate, maxBlockSize);
+
         // Gate / filter state
         gateGain = 1.0f;
         gateOpen = true;
@@ -212,6 +242,10 @@ public:
         dropSubShifter.reset();
         subLowpass.reset();
         ampEq[0].reset(); ampEq[1].reset(); ampEq[2].reset();
+        chugShaper.reset();
+        lowDirt.reset();
+        echo.reset();
+        abyss.reset();
     }
 
     int getLatencySamples() const noexcept { return latencySamples; }
@@ -309,7 +343,7 @@ public:
 
         const int n = juce::jmin (numSamples, maxBlock);
 
-        const double inGain  = juce::Decibels::decibelsToGain ((double) p.inputGainDb);
+        const double inGain  = juce::Decibels::decibelsToGain ((double) (p.inputGainDb + p.inputTrimDb));
         const double outGain = juce::Decibels::decibelsToGain ((double) p.outputGainDb);
 
         // ---- 1) Sum to mono double, apply input gain + optional gate -----------
@@ -373,6 +407,11 @@ public:
             monoIn[(size_t) i] = sum;
         }
 
+        // ---- 1.4) Chug detector listens to the DI the amp is about to get ---------
+        for (int i = 0; i < n; ++i)
+            shapeDi[(size_t) i] = (float) monoIn[(size_t) i];
+        chugShaper.analyse (shapeDi.data(), n);
+
         // ---- 1.5) Screamer boost in front of the amp (optional) ----------------
         if (p.boostOn)
             screamer.process (monoIn.data(), n, sampleRate,
@@ -420,12 +459,22 @@ public:
         for (auto& band : ampEq)
             band.process (mixBuf.data(), n);
 
+        // ---- 2.6) Shape pedal: Chug (dynamic punch) + Low Dirt ------------------
+        // Amounts glide to zero when the pedal is off; at zero both are exact
+        // bypass, so presets without Shape sound exactly as before.
+        chugShaper.setAmount (p.shapeOn ? p.chug : 0.0f);
+        chugShaper.setFrequency (p.chugFreqHz);
+        lowDirt.setAmount (p.shapeOn ? p.dirt : 0.0f);
+        for (int i = 0; i < n; ++i)
+            shapeBuf[(size_t) i] = (float) mixBuf[(size_t) i];
+        chugShaper.process (shapeBuf.data(), n);
+        lowDirt.process (shapeBuf.data(), n);
+
         // ---- 3) Write mono result back to all channels (float) -----------------
         for (int ch = 0; ch < numChannels; ++ch)
         {
             auto* w = buffer.getWritePointer (ch);
-            for (int i = 0; i < n; ++i)
-                w[i] = (float) mixBuf[(size_t) i];
+            std::copy (shapeBuf.begin(), shapeBuf.begin() + n, w);
         }
 
         // ---- 4) Cabinet IR convolution with smooth dry/wet blend ---------------
@@ -494,7 +543,30 @@ public:
             lowCut.process (ctx);
         }
 
-        // ---- 7) Output gain -----------------------------------------------------
+        // ---- 7) Void: Echo -> Abyss, stereo, with spillover ---------------------
+        {
+            float* left  = buffer.getWritePointer (0);
+            float* right = numChannels > 1 ? buffer.getWritePointer (1) : nullptr;
+
+            echo.setEnabled (p.delayOn);
+            echo.setTime (p.delayMs);
+            echo.setFeedback (p.delayFeedback);
+            echo.setDuck (p.delayDuck);
+            echo.setMix (p.delayMix);
+            echo.process (left, right, n);
+
+            abyss.setEnabled (p.reverbOn);
+            abyss.setDecay (p.reverbDecay);
+            abyss.setAbyss (p.reverbAbyss);
+            abyss.setTone (p.reverbTone);
+            abyss.setMix (p.reverbMix);
+            abyss.process (left, right, n);
+
+            for (int ch = 2; ch < numChannels; ++ch)
+                std::copy (left, left + n, buffer.getWritePointer (ch));
+        }
+
+        // ---- 8) Output gain -----------------------------------------------------
         buffer.applyGain ((float) outGain);
     }
 
@@ -985,4 +1057,11 @@ private:
     // Amp EQ: bass shelf, mid peak, treble shelf
     Biquad ampEq[3];
     float lastEq[3] { 1.0e9f, 1.0e9f, 1.0e9f };
+
+    // Shape pedal, Void unit
+    apex::dsp::ChugShaper chugShaper;
+    apex::dsp::LowDirt lowDirt;
+    std::vector<float> shapeDi, shapeBuf;
+    apex::dsp::StereoDelay echo;
+    apex::dsp::AbyssReverb abyss;
 };

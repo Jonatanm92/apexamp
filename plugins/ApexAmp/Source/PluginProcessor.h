@@ -27,7 +27,7 @@ public:
     bool acceptsMidi() const override  { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.2; }
+    double getTailLengthSeconds() const override;
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -53,17 +53,39 @@ public:
     bool hasUserIr()  const noexcept { return engine.hasUserIr(); }
     bool hasUserRig() const noexcept { return engine.hasUserRig(); }
 
+    /** Echo time in ms (follows the host tempo when synced). */
+    double getEchoMs() const;
+    double getHostBpm() const noexcept { return hostBpm.load(); }
+
+    /** Auto Input: listens for ~3 s of playing and sets the input trim so the
+        guitar hits the amp at the level the rigs were captured for. */
+    void startAutoInput();
+    bool isAutoInputListening() const noexcept { return autoLearning.load(); }
+    /** 0 = nothing yet, 1 = trim set, 2 = heard no guitar. */
+    int getAutoInputOutcome() const noexcept { return autoOutcome.load(); }
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     NamEngine::Params gatherParams();
     int currentLatency() const;
     void timerCallback() override;
+    void listenForAutoInput (const juce::AudioBuffer<float>&, int channels, int numSamples);
 
     NamEngine engine;
     juce::AudioParameterBool* bypassParam = nullptr;
     std::atomic<float>* dropOnParam = nullptr;
     std::atomic<int> pendingLatency { -1 };
     int reportedLatency = -1;
+    std::atomic<double> hostBpm { 120.0 };
+
+    // Auto Input (histogram of 10 ms input peaks in 0.5 dB bins, -60..+6 dBFS)
+    std::atomic<bool> autoLearning { false };
+    std::atomic<int> autoOutcome { 0 };
+    std::atomic<float> autoTrimResult { 0.0f };
+    bool autoRunning = false, autoTrimApplied = false;
+    std::array<int, 133> autoHistogram {};
+    int autoPlayingSamples = 0, autoTotalSamples = 0, autoWindowCount = 0;
+    float autoWindowPeak = 0.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ApexAmpProcessor)
 };
