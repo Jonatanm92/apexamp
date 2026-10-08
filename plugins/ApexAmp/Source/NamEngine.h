@@ -16,6 +16,7 @@
 #include "BinaryData.h"
 #include "apex/dsp/AbyssReverb.h"
 #include "apex/dsp/ChugShaper.h"
+#include "apex/dsp/FizzTamer.h"
 #include "apex/dsp/LowDirt.h"
 #include "apex/dsp/PitchShifter.h"
 #include "apex/dsp/StereoDelay.h"
@@ -75,6 +76,7 @@ public:
         float   trebleDb     = 0.0f;
         float   depthDb      = 0.0f;       // low resonance after the amp, flat at 0 dB
         float   highCutHz    = 20000.0f;   // post-cab low-pass (20 kHz = off)
+        float   fizz         = 0.0f;       // 0..1 dynamic resonance suppression after the cab
         bool    shapeOn      = false;      // Shape pedal: Chug + Low Dirt
         float   chug         = 0.5f;       // 0..1
         float   chugFreqHz   = 700.0f;
@@ -216,7 +218,9 @@ public:
         gateOpen = true;
         gateHoldCounter = 0;
         tightLp1 = tightLp2 = 0.0;
-        screamer.reset();
+        screamer.prepare (sampleRate, maxBlockSize);
+        fizzTamer.prepare (sampleRate);
+        fizzBuf.assign ((size_t) maxBlockSize, 0.0f);
 
         prepared = true;
     }
@@ -246,6 +250,7 @@ public:
         gateHoldCounter = 0;
         tightLp1 = tightLp2 = 0.0;
         screamer.reset();
+        fizzTamer.reset();
         dropMain.reset();
         dropSubShifter.reset();
         subLowpass.reset();
@@ -422,7 +427,7 @@ public:
 
         // ---- 1.5) Screamer boost in front of the amp (optional) ----------------
         if (p.boostOn)
-            screamer.process (monoIn.data(), n, sampleRate,
+            screamer.process (monoIn.data(), n,
                               p.boostDrive, p.boostTone,
                               juce::Decibels::decibelsToGain ((double) p.boostLevelDb));
 
@@ -541,6 +546,15 @@ public:
             juce::dsp::AudioBlock<float>          block (buffer);
             juce::dsp::ProcessContextReplacing<float> ctx (block);
             presenceFilter.process (ctx);
+        }
+
+        // ---- 5.2) Fizz tamer: dynamic resonance cuts (channels are identical here) --
+        fizzTamer.setAmount (p.fizz);
+        {
+            std::copy (buffer.getReadPointer (0), buffer.getReadPointer (0) + n, fizzBuf.data());
+            fizzTamer.process (fizzBuf.data(), n);
+            for (int ch = 0; ch < numChannels; ++ch)
+                std::copy (fizzBuf.data(), fizzBuf.data() + n, buffer.getWritePointer (ch));
         }
 
         // ---- 5.5) High cut (post-cab low-pass, off at 20 kHz) ------------------
@@ -822,11 +836,31 @@ private:
     // tone tilt, output level. Runs on the mono DI in front of the amp.
     struct Screamer
     {
-        double hpZ = 0.0, toneZ = 0.0;
-        void reset() { hpZ = 0.0; toneZ = 0.0; }
+        double hpZ = 0.0, toneZ = 0.0, rate = 48000.0;
+        // 4x oversampling around the clipper keeps its harmonics from folding back
+        juce::dsp::Oversampling<double> oversampler { 1, 2, juce::dsp::Oversampling<double>::filterHalfBandPolyphaseIIR, false };
 
-        void process (double* x, int n, double sr, float drive01, float tone01, double level)
+        void prepare (double sampleRate, int maxBlockSize)
         {
+            rate = sampleRate;
+            oversampler.initProcessing ((size_t) maxBlockSize);
+            reset();
+        }
+
+        void reset()
+        {
+            hpZ = 0.0;
+            toneZ = 0.0;
+            oversampler.reset();
+        }
+
+        void process (double* x, int n, float drive01, float tone01, double level)
+        {
+            double* channels[1] = { x };
+            juce::dsp::AudioBlock<double> block (channels, 1, (size_t) n);
+            auto up = oversampler.processSamplesUp (block);
+            const double sr = rate * (double) oversampler.getOversamplingFactor();
+
             const double hpA   = 1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi * 180.0 / sr);
             const double g      = 1.0 + (double) juce::jlimit (0.0f, 1.0f, drive01) * 24.0;
             const double toneHz = 2200.0 + (double) juce::jlimit (0.0f, 1.0f, tone01) * 5500.0;
@@ -836,16 +870,19 @@ private:
             // Compensate so low drive stays near unity level.
             const double makeup = 1.0 / std::tanh (g * 0.5);
 
-            for (int i = 0; i < n; ++i)
+            double* y = up.getChannelPointer (0);
+            const int count = (int) up.getNumSamples();
+            for (int i = 0; i < count; ++i)
             {
-                const double in = x[i];
+                const double in = y[i];
                 hpZ += hpA * (in - hpZ);
                 const double hp = in - hpZ;            // tightened (high-passed)
                 double d = std::tanh (g * hp + bias) - norm;
                 d *= makeup;
                 toneZ += lpA * (d - toneZ);            // tone low-pass
-                x[i] = toneZ * level;
+                y[i] = toneZ * level;
             }
+            oversampler.processSamplesDown (block);
         }
     };
 
@@ -1075,6 +1112,8 @@ private:
 
     double tightLp1 = 0.0, tightLp2 = 0.0; // pre-amp high-pass state
     Screamer screamer;
+    apex::dsp::FizzTamer fizzTamer;
+    std::vector<float> fizzBuf;
 
     // Drop pedal
     apex::dsp::PitchShifter dropMain, dropSubShifter;

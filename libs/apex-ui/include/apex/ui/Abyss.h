@@ -193,6 +193,8 @@ public:
     void setSelected (bool);
     void setEnabledState (bool);
     void setActivity (float level);   // 0..1, warms the icon while signal passes
+    /** The module's key setting, shown on the block (e.g. "-5 ST"). */
+    void setValueText (const juce::String&);
     std::function<void()> onSelect, onToggle;
 
     void paint (juce::Graphics&) override;
@@ -202,7 +204,7 @@ public:
 
 private:
     juce::Rectangle<float> barArea() const;
-    juce::String name;
+    juce::String name, valueText;
     Icon icon;
     bool selected = false, enabledState = true;
     float activity = 0.0f;

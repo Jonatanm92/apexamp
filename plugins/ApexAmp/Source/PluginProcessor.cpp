@@ -50,6 +50,7 @@ namespace pid
     constexpr auto depth      = "depth";
     constexpr auto highCut    = "highCut";
     constexpr auto inputTarget = "inputTarget";
+    constexpr auto fizz       = "fizz";
 }
 
 namespace
@@ -224,6 +225,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { pid::inputTarget, 1 }, "Input Target",
         StringArray { "Open", "Modern", "Hot" }, 1));
 
+    // ---- v0.9: Fizz Tamer (dynamic resonance suppression after the cab) -----------
+    layout.add (percent (pid::fizz, "Fizz Tamer", 0.0f));
+
     return layout;
 }
 
@@ -262,6 +266,7 @@ NamEngine::Params ApexAmpProcessor::gatherParams()
     p.inputTrimDb  = get (pid::inputTrim);
     p.depthDb      = get (pid::depth);
     p.highCutHz    = get (pid::highCut);
+    p.fizz         = get (pid::fizz) * 0.01f;
 
     p.shapeOn      = get (pid::shapeOn) > 0.5f;
     p.chug         = get (pid::chug) * 0.01f;

@@ -15,6 +15,7 @@ add_library(apex_dsp STATIC
     src/AbyssReverb.cpp
     src/ChugShaper.cpp
     src/Fft.cpp
+    src/FizzTamer.cpp
     src/LowDirt.cpp
     src/LpcFormantCorrector.cpp
     src/PitchShifter.cpp

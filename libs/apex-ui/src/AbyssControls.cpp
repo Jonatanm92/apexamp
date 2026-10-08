@@ -328,6 +328,11 @@ ChainBlock::ChainBlock (const juce::String& n, Icon i) : name (n), icon (i)
 
 void ChainBlock::setSelected (bool s)       { if (selected != s) { selected = s; repaint(); } }
 void ChainBlock::setEnabledState (bool e)   { if (enabledState != e) { enabledState = e; repaint(); } }
+void ChainBlock::setValueText (const juce::String& t)
+{
+    if (t != valueText) { valueText = t; repaint(); }
+}
+
 void ChainBlock::setActivity (float level)
 {
     level = juce::jlimit (0.0f, 1.0f, level);
@@ -384,7 +389,12 @@ void ChainBlock::paint (juce::Graphics& g)
               ink, selected ? 0.7f : 0.0f);
 
     const float warmth = juce::jmax (selected ? 0.9f : 0.0f, enabledState ? activity : 0.0f);
-    const auto iconArea = juce::Rectangle<float> (30.0f, 30.0f).withCentre ({ b.getCentreX(), b.getCentreY() + 2.0f });
+    const bool hasValue = valueText.isNotEmpty();
+    const float iconSize = hasValue ? 24.0f : 30.0f;
+    const auto iconArea = juce::Rectangle<float> (iconSize, iconSize).withCentre ({ b.getCentreX(), b.getCentreY() + (hasValue ? -3.0f : 2.0f) });
+    if (hasValue)
+        glowText (g, valueText, fonts::value (13.0f), { b.getX(), iconArea.getBottom() + 1.0f, b.getWidth(), 14.0f }, juce::Justification::centred,
+                  enabledState ? (selected ? colours::emberHot : colours::bone.withAlpha (0.9f)) : colours::rim, selected ? 0.4f : 0.0f);
     drawIcon (g, icon, iconArea, enabledState ? (warmth > 0.05f ? colours::ember.interpolatedWith (colours::emberHot, warmth * 0.5f) : colours::bone)
                                               : colours::rim, enabledState ? warmth : 0.0f);
 

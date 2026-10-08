@@ -858,12 +858,13 @@ void ThallbyssalEditor::buildCabChamber()
     cabMix = mix.get();
     owned.push_back (std::move (mix));
 
-    addKnob (host, "lowCut", {}, { 960.0f, 608.0f }, 40.0f, "Low cut after the cab");
-    addKnob (host, "highCut", {}, { 1084.0f, 608.0f }, 40.0f, "High cut after the cab: tames fizz (off at the top)");
-    for (auto [x, slot] : { std::pair<float, StatusCell**> { 960.0f, &lowCutCaption }, { 1084.0f, &highCutCaption } })
+    addKnob (host, "lowCut", {}, { 946.0f, 608.0f }, 40.0f, "Low cut after the cab");
+    addKnob (host, "fizz", {}, { 1022.0f, 608.0f }, 40.0f, "Fizz tamer: pulls back whistling resonances in the treble only while they ring, leaves the attack and brightness alone");
+    addKnob (host, "highCut", {}, { 1098.0f, 608.0f }, 40.0f, "High cut after the cab (off at the top)");
+    for (auto [x, slot] : { std::pair<float, StatusCell**> { 946.0f, &lowCutCaption }, { 1022.0f, &fizzCaption }, { 1098.0f, &highCutCaption } })
     {
         auto c = std::make_unique<StatusCell> (true);
-        c->setBounds (juce::Rectangle<float> (x - 60.0f, 634.0f, 120.0f, 30.0f).toNearestInt());
+        c->setBounds (juce::Rectangle<float> (x - 38.0f, 634.0f, 76.0f, 30.0f).toNearestInt());
         host.addAndMakeVisible (*c);
         *slot = c.get();
         owned.push_back (std::move (c));
@@ -1147,8 +1148,15 @@ void ThallbyssalEditor::tick()
     const float pulse = 0.5f + 0.5f * std::sin ((float) frameCounter * 0.25f);
     calibrate->setPulse (listening ? pulse : 0.0f);
     calibrate->setButtonText (listening ? "LISTENING" + juce::String::charToString (0x2026) : "CALIBRATE DI");
+    const bool calibrated = (bool) apvts.state.getProperty ("calibrated", false) || std::abs (trim) > 0.05f;
+    if (proc.getAutoInputOutcome() == 1 && ! calibrated)
+        apvts.state.setProperty ("calibrated", true, nullptr);
+    if (! calibrated && ! listening)
+        calibrate->setPulse (0.35f + 0.35f * pulse);   // first run: start here
     if (listening)
         matchStatus->set ("PLAY YOUR HEAVIEST RIFF", false, pulse);
+    else if (! calibrated)
+        matchStatus->set ("STEP 1: CALIBRATE YOUR DI", false, 0.5f + 0.5f * pulse);
     else if (silentFrames > 60)
         matchStatus->set (proc.getAutoInputOutcome() == 2 ? "NO GUITAR HEARD" : "WAITING FOR SIGNAL", false, 0.0f);
     else if (std::abs (matchPeak) <= 3.0f)
@@ -1194,6 +1202,7 @@ void ThallbyssalEditor::tick()
                          + (index == 3 && ! proc.hasUserIr() ? juce::String ("NO FILE") : name));
         cabValues->set ("CAB MIX", juce::String (juce::roundToInt (param ("cabMix"))) + "%", {});
         lowCutCaption->set ("LOW CUT", juce::String (juce::roundToInt (param ("lowCut"))) + " Hz", {});
+        fizzCaption->set ("FIZZ", param ("fizz") < 0.5f ? juce::String ("OFF") : juce::String (juce::roundToInt (param ("fizz"))) + "%", {});
         const float hc = param ("highCut");
         highCutCaption->set ("HIGH CUT", hc >= 19500.0f ? juce::String ("OFF") : juce::String (hc / 1000.0f, 1) + " kHz", {});
         portal->setIntensity (power ? juce::jlimit (0.0f, 1.0f, (outDb + 48.0f) / 42.0f) * (param ("cabMix") / 100.0f) : 0.0f);
@@ -1205,6 +1214,19 @@ void ThallbyssalEditor::tick()
     const bool moduleOn[numModules] = { param ("dropOn") > 0.5f, param ("gateOn") > 0.5f, param ("boostOn") > 0.5f, power,
                                         param ("shapeOn") > 0.5f, param ("cabMix") > 0.5f,
                                         param ("delayOn") > 0.5f || param ("reverbOn") > 0.5f };
+    {
+        const int st = juce::roundToInt (param ("dropShift"));
+        const char* rigs[] = { "BITE", "BODY", "EDGE", "USER" };
+        const bool echoOn = param ("delayOn") > 0.5f, abyssOn = param ("reverbOn") > 0.5f;
+        auto* ir = apvts.getParameter ("ir");
+        blocks[drop]->setValueText (noteName (4 + st) + (st <= -12 ? minus (" -1 OCT") : juce::String (" STD")));
+        blocks[gate]->setValueText (minus (juce::String (juce::roundToInt (param ("gate")))) + " dB");
+        blocks[boost]->setValueText ("DRIVE " + juce::String (juce::roundToInt (param ("boostDrive"))));
+        blocks[amp]->setValueText (param ("rigMode") > 0.5f ? juce::String ("BLEND") : juce::String (rigs[juce::jlimit (0, 3, juce::roundToInt (param ("rig")))]));
+        blocks[shape]->setValueText ("CHUG " + juce::String (juce::roundToInt (param ("chug"))));
+        blocks[cab]->setValueText (ir->getCurrentValueAsText().toUpperCase());
+        blocks[fx]->setValueText (echoOn && abyssOn ? juce::String ("ECHO + ABYSS") : (echoOn ? juce::String ("ECHO") : (abyssOn ? juce::String ("ABYSS") : juce::String ("OFF"))));
+    }
     for (int m = 0; m < numModules; ++m)
     {
         blocks[(size_t) m]->setEnabledState (moduleOn[m] && power);
@@ -1221,7 +1243,7 @@ void ThallbyssalEditor::tick()
     const float pressure = juce::jlimit (0.0f, 1.0f, (driveDb + 36.0f) / 42.0f);
     pressureGauge->setValue (pressure);
     pressureBar->setValue (pressure);
-    pressureCell->set ("PRESSURE", juce::String (juce::roundToInt (pressure * 100.0f)) + "%", "AMP INPUT DRIVE");
+    pressureCell->set ("AMP DRIVE", juce::String (juce::roundToInt (pressure * 100.0f)) + "%", "HOW HARD THE AMP IS HIT");
 
     if (frameCounter % 2 == 0)
     {
@@ -1238,9 +1260,10 @@ void ThallbyssalEditor::tick()
     const int st = juce::roundToInt (param ("dropShift"));
     const bool dropOn = param ("dropOn") > 0.5f;
     depthBar->setValue (dropOn ? (float) std::abs (st) / 12.0f : 0.0f);
-    depthCell->set ("DEPTH", dropOn ? minus ((st > 0 ? "+" : "") + juce::String (st)) + " ST" : juce::String ("OFF"),
-                    dropOn ? "E STD " + arrow() + " " + noteName (4 + st) + (st <= -12 ? minus (" -1 OCT") : juce::String (" STD"))
-                           : juce::String ("THE ABYSS AWAITS"));
+    depthCell->set ("TUNING", dropOn ? noteName (4 + st) + (st <= -12 ? minus (" -1 OCT") : juce::String (" STD")) : juce::String ("E STD"),
+                    dropOn ? "DROP " + minus ((st > 0 ? "+" : "") + juce::String (st)) + " ST  " + juce::String::charToString (0x00B7) + "  "
+                                 + juce::String (proc.getLatencyMs(), 1) + " MS"
+                           : juce::String ("DROP OFF  ") + juce::String::charToString (0x00B7) + "  CLICK DROP TO GO LOWER");
 
     outputGauge->setValue (juce::jlimit (0.0f, 1.0f, (outDb + 48.0f) / 48.0f));
     outputCell->set ("OUTPUT", outDb > -99.0f ? minus (juce::String (outDb, 1)) + " dB" : juce::String::charToString (0x2212) + juce::String::charToString (0x221e),

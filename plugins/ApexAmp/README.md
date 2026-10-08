@@ -121,8 +121,16 @@ a parameter with undo, crisp at any window size.
 - **Status**: amp pressure, output scope with DSP load and latency, drop depth, output level and a
   hot-signal warning.
 
-New effects are off by default and Depth / High Cut are neutral, so earlier sessions and presets
-sound the same.
+- **Fizz Tamer** (v0.9, Cab Chamber): sixteen narrow detector bands from 1.6 to 9.5 kHz follow the
+  treble; a band is cut only while it stands out from the spectral trend of its neighbours (the
+  whistling resonances of a cranked amp through a cab), by as much as it sticks out. Brightness
+  and pick attack stay; a measured +14 dB resonance comes down 13.6 dB with the mids untouched.
+- **Boost** is now 4x oversampled around its clipper, so its harmonics no longer fold back.
+- The chain blocks show each module's key setting (tuning, gate threshold, rig, IR, FX), and the
+  first open guides you to Calibrate DI.
+
+New effects are off by default and Depth / High Cut / Fizz are neutral, so earlier sessions and
+presets sound the same.
 
 ## v0.6: the rig
 

@@ -105,7 +105,7 @@ private:
     apex::ui::abyss::Portal* portal = nullptr;
     TextField* irName = nullptr;
     apex::ui::abyss::LinearSlider* cabMix = nullptr;
-    StatusCell *cabValues = nullptr, *lowCutCaption = nullptr, *highCutCaption = nullptr;
+    StatusCell *cabValues = nullptr, *lowCutCaption = nullptr, *fizzCaption = nullptr, *highCutCaption = nullptr;
 
     // status bar
     apex::ui::abyss::Gauge *pressureGauge = nullptr, *outputGauge = nullptr;

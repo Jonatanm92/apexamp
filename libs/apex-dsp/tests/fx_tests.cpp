@@ -8,6 +8,7 @@
 
 #include "apex/dsp/AbyssReverb.h"
 #include "apex/dsp/ChugShaper.h"
+#include "apex/dsp/FizzTamer.h"
 #include "apex/dsp/LowDirt.h"
 #include "apex/dsp/StereoDelay.h"
 #include "TestSignals.h"
@@ -544,6 +545,61 @@ void testReverb()
 }
 
 //==============================================================================
+Signal runFizz (Signal x, float amount, int block = 128)
+{
+    dsp::FizzTamer fizz;
+    fizz.prepare (fs);
+    fizz.setAmount (amount);
+    fizz.reset();
+    for (size_t pos = 0; pos < x.size(); pos += (size_t) block)
+        fizz.process (x.data() + pos, (int) std::min ((size_t) block, x.size() - pos));
+    return x;
+}
+
+double bandEnergy (const std::vector<double>& spectrum, double lo, double hi)
+{
+    const double binHz = fs / ((double) (spectrum.size() - 1) * 2.0);
+    double acc = 1.0e-30;
+    for (int k = (int) (lo / binHz); k <= (int) (hi / binHz) && k < (int) spectrum.size(); ++k)
+        acc += spectrum[(size_t) k];
+    return acc;
+}
+
+void testFizzTamer()
+{
+    std::printf ("\n[fizz tamer]\n");
+    // pink-ish noise (a gentle low-pass on white) with a +14 dB resonance at 4 kHz
+    Signal flat = filtered (noise (4.0, 0.3f), test::Biquad::lowpass (fs, 6000.0, 0.5));
+    auto peak = test::Biquad::bandpass (fs, 4000.0, 8.0);
+    Signal resonant (flat.size());
+    for (size_t i = 0; i < flat.size(); ++i)
+        resonant[i] = flat[i] + 4.0f * peak.process (flat[i]);
+
+    CHECK (runFizz (resonant, 0.0f) == resonant, "amount 0 is not bit-exact bypass");
+
+    const auto tamed = runFizz (resonant, 1.0f);
+    CHECK (finite (tamed), "non-finite output");
+    CHECK (runFizz (resonant, 1.0f, 333) == tamed, "output depends on the block size");
+
+    const auto before = test::averageSpectrum (resonant, at (0.5), at (4.0), 13);
+    const auto after  = test::averageSpectrum (tamed, at (0.5), at (4.0), 13);
+    const double atPeak = db (bandEnergy (after, 3800.0, 4200.0) / bandEnergy (before, 3800.0, 4200.0));
+    const double lowMid = db (bandEnergy (after, 600.0, 1400.0) / bandEnergy (before, 600.0, 1400.0));
+    const double away   = db (bandEnergy (after, 6500.0, 8000.0) / bandEnergy (before, 6500.0, 8000.0));
+
+    const auto flatOut = runFizz (flat, 1.0f);
+    const auto fb = test::averageSpectrum (flat, at (0.5), at (4.0), 13), fa = test::averageSpectrum (flatOut, at (0.5), at (4.0), 13);
+    const double flatTreble = db (bandEnergy (fa, 1800.0, 9000.0) / bandEnergy (fb, 1800.0, 9000.0));
+
+    std::printf ("  resonance at 4 kHz %+.1f dB, 1 kHz %+.2f dB, 6.5-8 kHz %+.2f dB, flat input's treble %+.2f dB\n",
+                 atPeak, lowMid, away, flatTreble);
+    CHECK (atPeak < -5.0, "resonance only cut by %.1f dB", atPeak);
+    CHECK (std::abs (lowMid) < 0.3, "mids changed by %.2f dB", lowMid);
+    CHECK (std::abs (away) < 2.0, "treble away from the resonance changed by %.2f dB", away);
+    CHECK (std::abs (flatTreble) < 1.5, "a smooth spectrum lost %.2f dB of treble", flatTreble);
+}
+
+//==============================================================================
 void measureCpu()
 {
     std::printf ("\n[cpu, 48 kHz stereo, 128-sample blocks]\n");
@@ -559,6 +615,7 @@ void measureCpu()
 
     time ("chug", [] (Signal& l, Signal&) { l = runChug (l, l, 1.0f, 800.0f, 128); });
     time ("low dirt", [] (Signal& l, Signal&) { l = runDirt (l, 1.0f); });
+    time ("fizz tamer", [] (Signal& l, Signal&) { l = runFizz (l, 1.0f); });
     time ("delay", [] (Signal& l, Signal& r)
     {
         dsp::StereoDelay d;
@@ -583,6 +640,7 @@ int main (int argc, char** argv)
     testLowDirt();
     testDelay();
     testReverb();
+    testFizzTamer();
     measureCpu();
 
     std::printf ("\n%s (%d failure%s)\n", failures == 0 ? "PASS" : "FAIL", failures, failures == 1 ? "" : "s");
