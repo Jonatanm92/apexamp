@@ -73,6 +73,8 @@ public:
         float   bassDb       = 0.0f;       // amp EQ, flat at 0 dB
         float   midDb        = 0.0f;
         float   trebleDb     = 0.0f;
+        float   depthDb      = 0.0f;       // low resonance after the amp, flat at 0 dB
+        float   highCutHz    = 20000.0f;   // post-cab low-pass (20 kHz = off)
         bool    shapeOn      = false;      // Shape pedal: Chug + Low Dirt
         float   chug         = 0.5f;       // 0..1
         float   chugFreqHz   = 700.0f;
@@ -170,6 +172,11 @@ public:
         presenceFilter.prepare (spec);
         updatePresenceCoeffs (0.0f);
 
+        highCut.prepare (spec);
+        highCut.setType (juce::dsp::StateVariableTPTFilterType::lowpass);
+        highCut.setResonance (0.707f);
+        highCut.setCutoffFrequency (20000.0f);
+
         // Dry/wet crossfade state for the cab.
         dryScratch.assign ((size_t) juce::jmax (1, numChannels),
                            std::vector<float> ((size_t) maxBlockSize, 0.0f));
@@ -192,8 +199,8 @@ public:
         subLowpass.setLowpass (sampleRate, 240.0);
         subLowpass.reset();
 
-        ampEq[0].reset(); ampEq[1].reset(); ampEq[2].reset();
-        lastEq[0] = lastEq[1] = lastEq[2] = 1.0e9f;
+        for (auto& band : ampEq) band.reset();
+        for (auto& last : lastEq) last = 1.0e9f;
 
         // Shape pedal and the Void unit
         chugShaper.prepare (sampleRate, maxBlockSize);
@@ -229,6 +236,7 @@ public:
         }
         lowCut.reset();
         presenceFilter.reset();
+        highCut.reset();
         srcUp.reset();
         srcDown.reset();
         if (resampling)
@@ -241,7 +249,7 @@ public:
         dropMain.reset();
         dropSubShifter.reset();
         subLowpass.reset();
-        ampEq[0].reset(); ampEq[1].reset(); ampEq[2].reset();
+        for (auto& band : ampEq) band.reset();
         chugShaper.reset();
         lowDirt.reset();
         echo.reset();
@@ -535,6 +543,21 @@ public:
             presenceFilter.process (ctx);
         }
 
+        // ---- 5.5) High cut (post-cab low-pass, off at 20 kHz) ------------------
+        if (p.highCutHz < 19500.0f)
+        {
+            highCut.setCutoffFrequency (juce::jlimit (1000.0f, (float) (0.45 * sampleRate), p.highCutHz));
+            juce::dsp::AudioBlock<float>          block (buffer);
+            juce::dsp::ProcessContextReplacing<float> ctx (block);
+            highCut.process (ctx);
+            highCutActive = true;
+        }
+        else if (highCutActive)
+        {
+            highCut.reset();   // switched off: the signal passes untouched
+            highCutActive = false;
+        }
+
         // ---- 6) Output low-cut (high-pass) -------------------------------------
         lowCut.setCutoffFrequency (juce::jlimit (20.0f, 300.0f, p.lowCutHz));
         {
@@ -571,6 +594,9 @@ public:
     }
 
     bool isReady() const noexcept { return prepared; }
+
+    /** Chug punch envelope (0..1) of the last block, for the editor. */
+    float getChugPunch() const noexcept { return chugShaper.getPunch(); }
     double getLoudness (int idx) const noexcept { return loudness[(size_t) juce::jlimit (0, 2, idx)]; }
 
 private:
@@ -733,15 +759,16 @@ private:
 
     void updateEqCoeffs (const Params& p)
     {
-        const float gains[3] = { p.bassDb, p.midDb, p.trebleDb };
-        for (int b = 0; b < 3; ++b)
+        const float gains[4] = { p.bassDb, p.midDb, p.trebleDb, p.depthDb };
+        for (int b = 0; b < 4; ++b)
         {
             if (std::abs (gains[b] - lastEq[b]) < 0.005f)
                 continue;
             lastEq[b] = gains[b];
             if (b == 0)      ampEq[0].setShelf (sampleRate, 110.0, gains[0], false);
             else if (b == 1) ampEq[1].setPeak (sampleRate, 700.0, 0.8, gains[1]);
-            else             ampEq[2].setShelf (sampleRate, 2600.0, gains[2], true);
+            else if (b == 2) ampEq[2].setShelf (sampleRate, 2600.0, gains[2], true);
+            else             ampEq[3].setPeak (sampleRate, 85.0, 1.1, gains[3]);   // power-amp style resonance
         }
     }
 
@@ -1009,6 +1036,8 @@ private:
     double ampRefRmsStored = 0.0;
 
     juce::dsp::StateVariableTPTFilter<float> lowCut;     // output sub-bass high-pass
+    juce::dsp::StateVariableTPTFilter<float> highCut;    // post-cab fizz low-pass
+    bool highCutActive = false;
 
     // Presence: high-shelf EQ post-cab for brightness control.
     juce::dsp::ProcessorDuplicator<juce::dsp::IIR::Filter<float>,
@@ -1055,8 +1084,8 @@ private:
     Biquad subLowpass;
 
     // Amp EQ: bass shelf, mid peak, treble shelf
-    Biquad ampEq[3];
-    float lastEq[3] { 1.0e9f, 1.0e9f, 1.0e9f };
+    Biquad ampEq[4];
+    float lastEq[4] { 1.0e9f, 1.0e9f, 1.0e9f, 1.0e9f };
 
     // Shape pedal, Void unit
     apex::dsp::ChugShaper chugShaper;

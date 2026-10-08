@@ -1,5 +1,7 @@
 // Renders a plugin editor headlessly to PNG for UI review.
-//   <tool> out.png [scale] [--set paramId=value ...] [--preset index] [--tuner]
+//   <tool> out.png [scale] [--set paramId=value ...] [--prop name=value ...] [--preset index] [--tuner]
+// --prop sets a property on the state tree before the editor opens (e.g. the
+// selected module of an editor).
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include APEX_SNAPSHOT_HEADER
@@ -35,6 +37,12 @@ int main (int argc, char** argv)
             const juce::String kv (argv[++i]);
             if (auto* p = dynamic_cast<juce::RangedAudioParameter*> (proc->apvts.getParameter (kv.upToFirstOccurrenceOf ("=", false, false))))
                 p->setValueNotifyingHost (p->convertTo0to1 (kv.fromFirstOccurrenceOf ("=", false, false).getFloatValue()));
+        }
+        else if (a == "--prop" && i + 1 < argc)
+        {
+            const juce::String kv (argv[++i]);
+            proc->apvts.state.setProperty (kv.upToFirstOccurrenceOf ("=", false, false),
+                                           kv.fromFirstOccurrenceOf ("=", false, false).getIntValue(), nullptr);
         }
         else if (a == "--preset" && i + 1 < argc) proc->presets.loadPreset (juce::String (argv[++i]).getIntValue());
         else if (a == "--tuner") tuner = true;

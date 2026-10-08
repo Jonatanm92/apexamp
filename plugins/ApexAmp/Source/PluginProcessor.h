@@ -64,6 +64,21 @@ public:
     /** 0 = nothing yet, 1 = trim set, 2 = heard no guitar. */
     int getAutoInputOutcome() const noexcept { return autoOutcome.load(); }
     float getAutoInputTrim() const noexcept { return autoTrimResult.load(); }
+    /** Peak level the Auto Input aims for (dBFS), from the target zone. */
+    float getInputTargetDb() const;
+
+    // Editor feeds: chug punch envelope (0..1), peak level into the amp (linear),
+    // last output block for the scope.
+    std::atomic<float> chugPunch { 0.0f }, ampDrive { 0.0f };
+    double getLatencyMs() const { return 1000.0 * getLatencySamples() / juce::jmax (1.0, getSampleRate()); }
+
+    /** Output waveform for the editor's scope: every 4th sample of the mono
+        output in a ring (the editor reads the most recent part). */
+    static constexpr int scopeSize = 2048;
+    std::array<std::atomic<float>, scopeSize> scope {};
+    std::atomic<int> scopeWrite { 0 };
+    /** Fraction of the block time spent processing (smoothed). */
+    std::atomic<float> dspLoad { 0.0f };
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -87,6 +102,7 @@ private:
     std::array<int, 133> autoHistogram {};
     int autoPlayingSamples = 0, autoTotalSamples = 0, autoWindowCount = 0;
     float autoWindowPeak = 0.0f;
+    int scopePhase = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ApexAmpProcessor)
 };

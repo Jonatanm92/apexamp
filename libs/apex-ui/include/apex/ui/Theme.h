@@ -30,10 +30,12 @@ namespace colours
     inline const juce::Colour faceplate    { 0xff1a1a1c };
 }
 
-/** Embedded OFL fonts (Barlow Condensed, Big Shoulders Display, JetBrains Mono). */
+/** Embedded OFL fonts (Barlow Condensed, Big Shoulders Display, JetBrains Mono,
+    Cinzel, Cinzel Decorative). */
 struct Fonts
 {
-    enum class Face { labelMedium, labelSemiBold, labelBold, display, monoMedium, monoBold };
+    enum class Face { labelMedium, labelSemiBold, labelBold, display, monoMedium, monoBold,
+                      serifSemiBold, serifBold, serifDecorative };
 
     static juce::Font get (Face face, float height, float kerning = 0.0f);
 

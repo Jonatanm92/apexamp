@@ -13,7 +13,10 @@ juce_add_binary_data(ApexUiAssets
         assets/fonts/BarlowCondensed-Bold.ttf
         assets/fonts/BigShouldersDisplay-ExtraBold.ttf
         assets/fonts/JetBrainsMono-Medium.ttf
-        assets/fonts/JetBrainsMono-Bold.ttf)
+        assets/fonts/JetBrainsMono-Bold.ttf
+        assets/fonts/Cinzel-SemiBold.ttf
+        assets/fonts/Cinzel-Bold.ttf
+        assets/fonts/CinzelDecorative-Black.ttf)
 set_target_properties(ApexUiAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(apex_ui INTERFACE)
@@ -25,6 +28,8 @@ target_sources(apex_ui INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Controls.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Shell.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PresetManager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorBase.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorBase.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/AbyssPaint.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/AbyssControls.cpp)
 target_include_directories(apex_ui INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(apex_ui INTERFACE ApexUiAssets)

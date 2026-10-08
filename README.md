@@ -78,7 +78,11 @@ Every Apex editor is built from `libs/apex-ui`:
 
 Headless screenshots for UI review: configure with `-DAPEX_BUILD_SNAPSHOTS=ON`, then
 `xvfb-run build/tools/snapshot/apexamp_snapshot_artefacts/Release/apexamp_snapshot amp.png 2 --preset 8`
-(also `apexdrop_snapshot`, `--set id=value`, `--tuner`).
+(also `apexdrop_snapshot`, `--set id=value`, `--prop name=value`, `--tuner`).
+
+`apex::ui::abyss` (Abyss.h) is the second visual language: procedural basalt with ember cracks,
+thorned frames, glowing knobs, chain blocks, meters, radar, scope, gauge and portal (used by
+ApexAmp's Thallbyssal editor).
 
 ## Selling
 

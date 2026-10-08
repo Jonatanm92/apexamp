@@ -1,5 +1,5 @@
 #include "PluginProcessor.h"
-#include "AmpEditor.h"
+#include "ThallbyssalEditor.h"
 #include "Presets.h"
 
 namespace pid
@@ -47,6 +47,9 @@ namespace pid
     constexpr auto reverbAbyss = "reverbAbyss";
     constexpr auto reverbTone = "reverbTone";
     constexpr auto reverbMix  = "reverbMix";
+    constexpr auto depth      = "depth";
+    constexpr auto highCut    = "highCut";
+    constexpr auto inputTarget = "inputTarget";
 }
 
 namespace
@@ -54,8 +57,9 @@ namespace
     // Echo divisions in quarter notes, matching the delayDiv choices.
     constexpr double divisionBeats[] = { 2.0, 1.5, 1.0, 2.0 / 3.0, 0.75, 0.5, 1.0 / 3.0, 0.25 };
 
-    // Auto Input: where the 90th percentile of 10 ms peaks should land.
-    constexpr float autoTargetDb = -9.0f;
+    // Auto Input: where the 90th percentile of 10 ms peaks should land, per
+    // target zone (open / modern / hot).
+    constexpr float autoTargetDb[] = { -12.0f, -9.0f, -6.0f };
     constexpr float autoFloorDb  = -54.0f;
 }
 
@@ -64,7 +68,7 @@ ApexAmpProcessor::ApexAmpProcessor()
           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, &undoManager, "PARAMETERS", createLayout()),
-      presets (apvts, "ApexAmp", ApexPresets::all(), { "bypass", pid::inputTrim })
+      presets (apvts, "ApexAmp", ApexPresets::all(), { "bypass", pid::inputTrim, pid::inputTarget })
 {
     bypassParam = dynamic_cast<juce::AudioParameterBool*> (apvts.getParameter ("bypass"));
     dropOnParam = apvts.getRawParameterValue (pid::dropOn);
@@ -210,6 +214,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     layout.add (percent (pid::reverbTone, "Abyss Tone", 50.0f));
     layout.add (percent (pid::reverbMix, "Abyss Mix", 25.0f));
 
+    // ---- v0.8: Depth, High Cut, Auto Input target zone --------------------------
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::depth, 1 }, "Depth",
+        NormalisableRange<float> (-6.0f, 12.0f, 0.1f), 0.0f, AudioParameterFloatAttributes().withLabel ("dB")));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::highCut, 1 }, "High Cut",
+        skewed (2000.0f, 20000.0f, 10.0f, 7000.0f), 20000.0f,
+        AudioParameterFloatAttributes().withLabel ("Hz")
+            .withStringFromValueFunction ([] (float v, int) { return v >= 19500.0f ? juce::String ("Off") : juce::String (v / 1000.0f, 1) + " k"; })));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { pid::inputTarget, 1 }, "Input Target",
+        StringArray { "Open", "Modern", "Hot" }, 1));
+
     return layout;
 }
 
@@ -246,6 +260,8 @@ NamEngine::Params ApexAmpProcessor::gatherParams()
     p.midDb        = get (pid::mid);
     p.trebleDb     = get (pid::treble);
     p.inputTrimDb  = get (pid::inputTrim);
+    p.depthDb      = get (pid::depth);
+    p.highCutHz    = get (pid::highCut);
 
     p.shapeOn      = get (pid::shapeOn) > 0.5f;
     p.chug         = get (pid::chug) * 0.01f;
@@ -348,7 +364,7 @@ void ApexAmpProcessor::listenForAutoInput (const juce::AudioBuffer<float>& buffe
             if ((below += autoHistogram[(size_t) bin]) >= (int) std::ceil (0.9 * total))
                 break;
         const float peakDb = (float) bin * 0.5f - 60.0f;
-        autoTrimResult.store (juce::jlimit (-18.0f, 18.0f, autoTargetDb - peakDb));
+        autoTrimResult.store (juce::jlimit (-18.0f, 18.0f, getInputTargetDb() - peakDb));
         autoOutcome.store (1);
     }
     else
@@ -357,6 +373,11 @@ void ApexAmpProcessor::listenForAutoInput (const juce::AudioBuffer<float>& buffe
     }
     autoLearning.store (false);
     autoRunning = false;
+}
+
+float ApexAmpProcessor::getInputTargetDb() const
+{
+    return autoTargetDb[juce::jlimit (0, 2, (int) apvts.getRawParameterValue (pid::inputTarget)->load())];
 }
 
 int ApexAmpProcessor::currentLatency() const
@@ -408,6 +429,7 @@ bool ApexAmpProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
+    const auto started = juce::Time::getHighResolutionTicks();
 
     const int totalIn  = getTotalNumInputChannels();
     const int totalOut = getTotalNumOutputChannels();
@@ -432,21 +454,50 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
                 hostBpm.store (*bpm, std::memory_order_relaxed);
 
     if (bypassParam == nullptr || ! bypassParam->get())
+    {
         engine.process (buffer, gatherParams());
+        chugPunch.store (engine.getChugPunch(), std::memory_order_relaxed);
+    }
+
+    // Level the amp is hit with (after trim + gain), for the editor's pressure gauge.
+    const float drive = inMag * juce::Decibels::decibelsToGain (apvts.getRawParameterValue (pid::inputGain)->load()
+                                                                + apvts.getRawParameterValue (pid::inputTrim)->load());
+    ampDrive.store (drive, std::memory_order_relaxed);
 
     if (tunerFeed.mute.load (std::memory_order_relaxed))
         buffer.clear();
+
+    // Scope feed (decimated mono output).
+    {
+        int w = scopeWrite.load (std::memory_order_relaxed);
+        const int channels = buffer.getNumChannels();
+        for (int i = scopePhase; i < n; i += 4)
+        {
+            float v = 0.0f;
+            for (int ch = 0; ch < channels; ++ch)
+                v += buffer.getReadPointer (ch)[i];
+            scope[(size_t) w].store (v / (float) juce::jmax (1, channels), std::memory_order_relaxed);
+            w = (w + 1) % scopeSize;
+        }
+        scopePhase = (scopePhase + 4 - n % 4) % 4;
+        scopeWrite.store (w, std::memory_order_release);
+    }
 
     // Output level (post-engine).
     float outMag = 0.0f;
     for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
         outMag = juce::jmax (outMag, buffer.getMagnitude (ch, 0, n));
     outputMagnitude.store (outMag);
+
+    const double elapsed = juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - started);
+    const double available = (double) n / juce::jmax (1.0, getSampleRate());
+    const float load = (float) (elapsed / juce::jmax (1.0e-6, available));
+    dspLoad.store (dspLoad.load (std::memory_order_relaxed) * 0.95f + load * 0.05f, std::memory_order_relaxed);
 }
 
 juce::AudioProcessorEditor* ApexAmpProcessor::createEditor()
 {
-    return new AmpEditor (*this);
+    return new ThallbyssalEditor (*this);
 }
 
 void ApexAmpProcessor::getStateInformation (juce::MemoryBlock& destData)

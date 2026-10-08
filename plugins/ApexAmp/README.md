@@ -97,10 +97,37 @@ listen, repeat.
 
 ---
 
+## v0.8: Thallbyssal
+
+The editor is now **Thallbyssal**, built in the abyss visual language of apex-ui: black basalt with
+ember-lit cracks, thorned gothic frames, Cinzel lettering. All of it is rendered in code
+(procedural stone, vector ornaments, glow passes), and every control is a live component bound to
+a parameter with undo, crisp at any window size.
+
+- **Input Match**: DI level relative to the target, a calibration radar (the closer to the centre,
+  the closer your DI sits to the target), match status, **Target Zone** (open / modern / hot) and
+  **Calibrate DI** (Auto Input: listens for ~3 s and sets an input trim kept out of presets).
+- **Abyssal Core** (amp): Gain, Bass, Mid, Treble, Presence, **Depth** (new: power-amp resonance
+  around 85 Hz, flat at 0 dB), Tight, Master; rigs Bite / Body / Edge / Blend (+ trims) / User.
+- **Signal chain**: Drop, Gate, Boost, Amp, Shape, Cab, FX. Click a block to edit it in the centre
+  panel, click its bar to switch it on or off; the links crackle with the signal. The output ring
+  is the power switch.
+- **Shape** (Chug Forge): Chug (pick-attack punch read from the DI before the amp, applied after
+  it), Frequency, Low Dirt (parallel growl on the lows), with a live punch meter.
+- **FX** (The Void): Echo (time or host-synced division, tap, feedback, duck, mix) and Abyss reverb
+  (decay, octave-down shimmer depth, tone, mix). Both spill over when switched off.
+- **Cab Chamber**: IR slot (prev / next / load), cab mix, low cut and **High Cut** (new, off at
+  the top); the portal glows with the output.
+- **Status**: amp pressure, output scope with DSP load and latency, drop depth, output level and a
+  hot-signal warning.
+
+New effects are off by default and Depth / High Cut are neutral, so earlier sessions and presets
+sound the same.
+
 ## v0.6: the rig
 
-The editor is now a full rig built from the Apex design system: the head sits on a 4x12 and a
-pedalboard runs in front of it.
+(Superseded in the UI by Thallbyssal; the DSP below is unchanged.) The editor was a full rig built
+from the Apex design system: the head on a 4x12 with a pedalboard in front of it.
 
 - **Drop** (new): apex-dsp's Live pitch engine in front of the amp, -12..+12 semitones with a
   seven-segment display, **Body** (keeps the pickup / body resonances where a real drop tuning

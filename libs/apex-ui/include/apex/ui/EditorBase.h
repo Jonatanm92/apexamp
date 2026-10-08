@@ -25,8 +25,12 @@ class EditorBase : public juce::AudioProcessorEditor,
 public:
     static constexpr int headerHeight = 48;
 
+    /** With builtInHeader false the stage covers the whole canvas and the
+        editor provides its own preset / tuner / settings controls, calling the
+        protected helpers below. */
     EditorBase (juce::AudioProcessor&, juce::AudioProcessorValueTreeState&, PresetManager&,
-                const juce::String& productName, int designWidth, int designHeight, TunerFeed* tuner);
+                const juce::String& productName, int designWidth, int designHeight, TunerFeed* tuner,
+                bool builtInHeader = true);
     ~EditorBase() override;
 
     void resized() override;
@@ -44,6 +48,14 @@ protected:
 
     HeaderBar& getHeader() noexcept { return header; }
 
+    // for editors with their own header
+    void showPresetMenu (juce::Component& target);
+    void showSaveDialog();
+    void showSettingsMenu (juce::Component& target);
+    void toggleTuner();
+    bool isTunerOpen() const noexcept { return tuner != nullptr && tuner->isVisible(); }
+    std::function<void()> onTunerClosed;
+
     juce::Component stage;   // design-space area under the header
     ApexLookAndFeel lookAndFeel;
     juce::AudioProcessorValueTreeState& apvts;
@@ -51,9 +63,6 @@ protected:
 
 private:
     void timerCallback() override;
-    void showPresetMenu();
-    void showSaveDialog();
-    void showSettingsMenu();
     void setUiScale (float);
     void refreshHeader();
 
@@ -63,7 +72,7 @@ private:
     juce::TooltipWindow tooltips { this, 700 };
     std::unique_ptr<juce::AlertWindow> saveWindow;
     int designW, designH;
-    bool constructed = false;
+    bool constructed = false, hasHeader = true;
 };
 
 } // namespace apex::ui

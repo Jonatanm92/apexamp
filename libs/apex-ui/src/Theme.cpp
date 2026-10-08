@@ -19,11 +19,14 @@ namespace
             faces[3] = juce::Typeface::createSystemTypefaceFor (BigShouldersDisplayExtraBold_ttf, BigShouldersDisplayExtraBold_ttfSize);
             faces[4] = juce::Typeface::createSystemTypefaceFor (JetBrainsMonoMedium_ttf,     JetBrainsMonoMedium_ttfSize);
             faces[5] = juce::Typeface::createSystemTypefaceFor (JetBrainsMonoBold_ttf,       JetBrainsMonoBold_ttfSize);
+            faces[6] = juce::Typeface::createSystemTypefaceFor (CinzelSemiBold_ttf,          CinzelSemiBold_ttfSize);
+            faces[7] = juce::Typeface::createSystemTypefaceFor (CinzelBold_ttf,              CinzelBold_ttfSize);
+            faces[8] = juce::Typeface::createSystemTypefaceFor (CinzelDecorativeBlack_ttf,   CinzelDecorativeBlack_ttfSize);
         }
 
         ~TypefaceSet() override { clearSingletonInstance(); }
 
-        juce::Typeface::Ptr faces[6];
+        juce::Typeface::Ptr faces[9];
 
         JUCE_DECLARE_SINGLETON_INLINE (TypefaceSet, false)
     };

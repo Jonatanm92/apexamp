@@ -13,43 +13,45 @@ namespace
 
 EditorBase::EditorBase (juce::AudioProcessor& processor, juce::AudioProcessorValueTreeState& state,
                         PresetManager& presetManager, const juce::String& productName,
-                        int designWidth, int designHeight, TunerFeed* tunerFeed)
+                        int designWidth, int designHeight, TunerFeed* tunerFeed, bool builtInHeader)
     : juce::AudioProcessorEditor (processor), apvts (state), presets (presetManager),
-      header (productName), designW (designWidth), designH (designHeight)
+      header (productName), designW (designWidth), designH (designHeight), hasHeader (builtInHeader)
 {
     setLookAndFeel (&lookAndFeel);
     setOpaque (true);
 
     addAndMakeVisible (content);
     content.addAndMakeVisible (stage);
-    content.addAndMakeVisible (header);
+    if (hasHeader)
+        content.addAndMakeVisible (header);
 
     if (tunerFeed != nullptr)
     {
         tuner = std::make_unique<TunerOverlay> (*tunerFeed);
         content.addChildComponent (*tuner);
-        tuner->onClose = [this] { header.tunerButton.setToggleState (false, juce::dontSendNotification); };
-        header.tunerButton.onClick = [this]
+        tuner->onClose = [this]
         {
-            if (tuner->isVisible()) tuner->close();
-            else { tuner->open(); header.tunerButton.setToggleState (true, juce::dontSendNotification); }
+            header.tunerButton.setToggleState (false, juce::dontSendNotification);
+            if (onTunerClosed) onTunerClosed();
         };
+        header.tunerButton.onClick = [this] { toggleTuner(); };
     }
     header.setShowsTuner (tunerFeed != nullptr);
 
     header.previousButton.onClick = [this] { presets.loadPrevious(); refreshHeader(); };
     header.nextButton.onClick     = [this] { presets.loadNext();     refreshHeader(); };
-    header.presetBox.onClick      = [this] { showPresetMenu(); };
+    header.presetBox.onClick      = [this] { showPresetMenu (header.presetBox); };
     header.saveButton.onClick     = [this] { showSaveDialog(); };
     header.aButton.onClick        = [this] { presets.selectSlot (0); refreshHeader(); };
     header.bButton.onClick        = [this] { presets.selectSlot (1); refreshHeader(); };
     header.undoButton.onClick     = [this] { if (auto* u = apvts.undoManager) u->undo(); };
     header.redoButton.onClick     = [this] { if (auto* u = apvts.undoManager) u->redo(); };
-    header.settingsButton.onClick = [this] { showSettingsMenu(); };
+    header.settingsButton.onClick = [this] { showSettingsMenu (header.settingsButton); };
 
     content.setBounds (0, 0, designW, designH);
+    const int top = hasHeader ? headerHeight : 0;
     header.setBounds (0, 0, designW, headerHeight);
-    stage.setBounds (0, headerHeight, designW, designH - headerHeight);
+    stage.setBounds (0, top, designW, designH - top);
     if (tuner != nullptr)
         tuner->setBounds (stage.getBounds());
 
@@ -58,7 +60,12 @@ EditorBase::EditorBase (juce::AudioProcessor& processor, juce::AudioProcessorVal
         c->setFixedAspectRatio ((double) designW / (double) designH);
     setResizeLimits (juce::roundToInt (designW * 0.6f), juce::roundToInt (designH * 0.6f), designW * 2, designH * 2);
 
-    const float saved = juce::jlimit (0.6f, 2.0f, (float) (double) apvts.state.getProperty ("uiScale", 1.0));
+    // First open: as large as possible up to 100 %, leaving room on the screen.
+    float fit = 1.0f;
+    if (auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+        fit = juce::jmin (1.0f, 0.9f * (float) display->userArea.getHeight() / (float) designH,
+                          0.9f * (float) display->userArea.getWidth() / (float) designW);
+    const float saved = juce::jlimit (0.6f, 2.0f, (float) (double) apvts.state.getProperty ("uiScale", juce::jmax (0.6f, fit)));
     setSize (juce::roundToInt ((float) designW * saved), juce::roundToInt ((float) designH * saved));
     constructed = true;
 
@@ -131,7 +138,20 @@ void EditorBase::timerCallback()
     tick();
 }
 
-void EditorBase::showPresetMenu()
+void EditorBase::toggleTuner()
+{
+    if (tuner == nullptr)
+        return;
+    if (tuner->isVisible())
+        tuner->close();
+    else
+    {
+        tuner->open();
+        header.tunerButton.setToggleState (true, juce::dontSendNotification);
+    }
+}
+
+void EditorBase::showPresetMenu (juce::Component& target)
 {
     presets.refreshUserPresets();
     juce::PopupMenu menu;
@@ -149,8 +169,8 @@ void EditorBase::showPresetMenu()
     menu.addItem (10001, "Save As" + juce::String::charToString (0x2026));
     menu.addItem (10002, "Open Preset Folder");
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&header.presetBox)
-                                                  .withMinimumWidth (header.presetBox.getWidth()),
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target)
+                                                  .withMinimumWidth (target.getWidth()),
                         [this] (int result)
                         {
                             if (result == 10001)      showSaveDialog();
@@ -176,7 +196,7 @@ void EditorBase::showSaveDialog()
     }), false);
 }
 
-void EditorBase::showSettingsMenu()
+void EditorBase::showSettingsMenu (juce::Component& target)
 {
     juce::PopupMenu menu;
     juce::PopupMenu size;
@@ -187,7 +207,7 @@ void EditorBase::showSettingsMenu()
     menu.addSubMenu ("Window size", size);
     addSettingsItems (menu);
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&header.settingsButton),
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target),
                         [this] (int result)
                         {
                             if (result >= 1 && result <= (int) std::size (scales))
