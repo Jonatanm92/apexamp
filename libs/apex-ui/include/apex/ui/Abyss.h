@@ -66,7 +66,7 @@ enum class Icon
 {
     drop, gate, boost, amp, shape, cab, fx, eq,
     link, spiral, sun, trident, check, warning, target,
-    previous, next, save, undo, redo, tuner, settings, load, echo, abyss
+    previous, next, save, undo, redo, tuner, settings, load, echo, abyss, kick
 };
 /** Icon as a stroke path fitted into the area (stroke it ~area/14 wide). */
 juce::Path iconPath (Icon, juce::Rectangle<float> area);
@@ -263,6 +263,22 @@ private:
     struct Blip { float angle, radius, life; };
     std::vector<Blip> blips;
     float sweep = 0.0f, centreGlow = 0.0f;
+};
+
+/** Scrolling strip of hits (e.g. kicks): each a glowing bar sized by its
+    velocity, drifting left and fading out over a few seconds. */
+class HitStrip : public juce::Component
+{
+public:
+    HitStrip() { setInterceptsMouseClicks (false, false); }
+    void addHit (float velocity) { hits.push_back ({ 1.0f, velocity }); }
+    /** Moves everything left by `fraction` of the width. */
+    void advance (float fraction);
+    void paint (juce::Graphics&) override;
+
+private:
+    struct Hit { float x, velocity; };
+    std::vector<Hit> hits;
 };
 
 /** Oscilloscope trace. */

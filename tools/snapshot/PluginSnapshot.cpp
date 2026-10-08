@@ -55,12 +55,15 @@ int main (int argc, char** argv)
         findAndOpenTuner (*editor);
 
     // Let timers, attachments and async updates run, and feed the meters.
-    for (int i = 0; i < 20; ++i)
+    for (int i = 0; i < 40; ++i)
     {
         juce::AudioBuffer<float> buffer (2, 512);
         for (int s = 0; s < 512; ++s)
         {
-            const float v = 0.3f * std::sin (0.0108f * (float) (i * 512 + s));
+            // a chugging low E: 16ths at 150 bpm, each note picked and damped
+            const int t = i * 512 + s, inNote = t % 4800;
+            const float env = inNote < 3600 ? std::exp (-(float) inNote / 1800.0f) : 0.0f;
+            const float v = 0.4f * env * std::sin (0.0108f * (float) t);
             buffer.setSample (0, s, v);
             buffer.setSample (1, s, v);
         }

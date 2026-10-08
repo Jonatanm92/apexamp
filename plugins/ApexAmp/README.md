@@ -97,6 +97,34 @@ listen, repeat.
 
 ---
 
+## v0.10: The Legion
+
+Play a riff; a band plays it with you. **The Legion** (the BAND block in the chain) listens to the
+DI before the amp and adds, live:
+
+- **Kick** on every chug. In **Chugs** mode a pick attack only gets a kick when its low band
+  confirms a low-string note, so the lead notes on the high strings stay kick-free; **All Notes**
+  kicks every attack. **Feel** sets how light an attack still counts, **Tone** goes from deep and
+  round to tight and clicky. Velocity follows your picking. The hit strip shows every hit.
+- **Bass**: the riff an octave under the guitar (plus any drop), voiced like a modern metal bass:
+  a clean sub under a driven, low-passed mid band (**Grit**). It follows the input trim, not the
+  amp gain, so cranking the amp doesn't change the bass.
+
+The Legion is mixed in after the effects and before the output level. Off by default.
+
+**Riff capture.** Whether or not the DAW is recording, the plugin keeps the last 30 seconds of the
+DI, the bass and the kick hits. Drag **RIFF DI**, **BASS** or **KICK MIDI** from the Legion panel
+straight into the DAW (or click a tile to show the file). You get a 24-bit WAV of the clean DI to
+re-amp later, the bass as audio, and a MIDI file with a GM kick (note 36, channel 10) on every hit
+at the host tempo, placed on the pick rather than when the detector fired. Silence before and after
+the riff is trimmed. Until you play something new, all three tiles hand out the same take. Files go
+to `Music/Apex Riffs/`.
+
+Tested on a 150 bpm riff of 27 low chugs and 12 lead notes: Chugs mode kicks 26 of the chugs (25
+within 5 ms of the pick), none of the lead notes and nothing between notes; you hear the kick about
+4.5 ms after the pick (worst 11 ms), and the recorded kick lands within 6 ms of it. The bass tracks
+an octave down within 2 cents. The Legion costs about 5 % of one core at 48 kHz.
+
 ## v0.8: Thallbyssal
 
 The editor is now **Thallbyssal**, built in the abyss visual language of apex-ui: black basalt with
@@ -113,7 +141,7 @@ a parameter with undo, crisp at any window size.
   panel, click its bar to switch it on or off; the links crackle with the signal. The output ring
   is the power switch.
 - **Shape** (Chug Forge): Chug (pick-attack punch read from the DI before the amp, applied after
-  it), Frequency, Low Dirt (parallel growl on the lows), with a live punch meter.
+  it), Frequency, Growl (parallel growl on the lows), with a live punch meter.
 - **FX** (The Void): Echo (time or host-synced division, tap, feedback, duck, mix) and Abyss reverb
   (decay, octave-down shimmer depth, tone, mix). Both spill over when switched off.
 - **Cab Chamber**: IR slot (prev / next / load), cab mix, low cut and **High Cut** (new, off at

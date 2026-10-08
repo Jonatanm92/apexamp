@@ -99,4 +99,11 @@ if(APEXAMP_BUILD_TESTS)
 
     add_executable(resample_check tools/resample_check.cpp)
     add_test(NAME resample_streaming COMMAND resample_check)
+
+    juce_add_console_app(riff_capture_check PRODUCT_NAME "riff_capture_check")
+    target_sources(riff_capture_check PRIVATE tools/riff_capture_check.cpp)
+    target_include_directories(riff_capture_check PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
+    target_compile_definitions(riff_capture_check PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    target_link_libraries(riff_capture_check PRIVATE juce::juce_audio_formats PUBLIC juce::juce_recommended_config_flags)
+    add_test(NAME riff_capture COMMAND riff_capture_check)
 endif()

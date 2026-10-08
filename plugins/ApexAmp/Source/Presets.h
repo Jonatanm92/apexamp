@@ -13,7 +13,7 @@
  *
  * rigMode: 0 = Single, 1 = Blend
  * rig:     0 = Bite, 1 = Body, 2 = Edge, 3 = User
- * ir:      0 = Ashen, 1 = Meshuggah, 2 = PDI-09
+ * ir:      0 = Cinder, 1 = Iron, 2 = Obsidian
  */
 namespace ApexPresets
 {

@@ -52,6 +52,24 @@ public:
     bool loadUserRig (const juce::File& f) { return engine.loadUserRig (f); }
     bool hasUserIr()  const noexcept { return engine.hasUserIr(); }
     bool hasUserRig() const noexcept { return engine.hasUserRig(); }
+    /** Exports the last riff into a new folder under the user's Apex Riffs
+        folder. Until something new is played, every call hands back the same
+        take, so the DI, bass and kick dragged out one after the other match. */
+    RiffRecorder::Files exportRiff()
+    {
+        const auto sound = engine.getRiffLastSound();
+        if (lastRiff.ok && sound == lastRiffSound && lastRiff.di.existsAsFile() && lastRiff.bass.existsAsFile() && lastRiff.kicks.existsAsFile())
+            return lastRiff;
+        const auto folder = juce::File::getSpecialLocation (juce::File::userMusicDirectory)
+                                .getChildFile ("Apex Riffs")
+                                .getChildFile ("Riff " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M-%S"))
+                                .getNonexistentSibling (false);
+        lastRiff = engine.exportRiff (folder, getHostBpm());
+        lastRiffSound = sound;
+        return lastRiff;
+    }
+    std::uint32_t getLegionHits() const noexcept { return engine.legionHits.load (std::memory_order_relaxed); }
+    float getLegionLastVelocity() const noexcept { return engine.legionLastVelocity.load (std::memory_order_relaxed); }
 
     /** Echo time in ms (follows the host tempo when synced). */
     double getEchoMs() const;
@@ -88,6 +106,8 @@ private:
     void listenForAutoInput (const juce::AudioBuffer<float>&, int channels, int numSamples);
 
     NamEngine engine;
+    RiffRecorder::Files lastRiff;       // message thread: the last take exported
+    std::int64_t lastRiffSound = -2;
     juce::AudioParameterBool* bypassParam = nullptr;
     std::atomic<float>* dropOnParam = nullptr;
     std::atomic<int> pendingLatency { -1 };

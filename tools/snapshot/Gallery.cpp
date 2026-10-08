@@ -138,7 +138,7 @@ struct Composition : juce::Component
             draw::displayGlass (g, lcd, 5.0f);
             g.setColour (colours::amber);
             g.setFont (Fonts::monoBold (14.0f));
-            g.drawText ("01  ASHEN  4x12", lcd.reduced (12.0f, 0.0f), juce::Justification::centredLeft);
+            g.drawText ("01  CINDER  4x12", lcd.reduced (12.0f, 0.0f), juce::Justification::centredLeft);
             pedalKnob (g, { cab.getX() + 56.0f, cab.getY() + 112.0f }, 42.0f, 1.0f, "MIX", colours::bone);
             pedalKnob (g, { cab.getCentreX(), cab.getY() + 112.0f }, 42.0f, 0.25f, "LOW CUT", colours::bone);
             pedalKnob (g, { cab.getRight() - 56.0f, cab.getY() + 112.0f }, 42.0f, 0.5f, "AIR", colours::bone);

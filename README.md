@@ -4,7 +4,7 @@ One repository for the Apex plugin suite and the DSP the plugins share.
 
 | | What it is | Status |
 |---|---|---|
-| [**ApexAmp**](plugins/ApexAmp/README.md) | NAM-powered high-gain rig: head on a 4x12, pedalboard with Drop (pitch + sub), Gate, Boost and Cab, amp EQ, strobe tuner | beta |
+| [**ApexAmp**](plugins/ApexAmp/README.md) (Thallbyssal) | NAM-powered high-gain rig: Drop, Gate, Boost, amp, Chug / Growl, cab with Fizz Tamer, echo and abyss reverb, and **The Legion**: a kick on every chug and a bass an octave down, live, with the last riff ready to drag into the DAW as DI, bass and kick MIDI | beta |
 | [**Apex Drop**](#apex-drop) | Drop-tuning pitch shifter: Live (play through it) and Studio (mix quality) engines, formant-correct "Body", sub-octave | v0.2 |
 | [**apex-dsp**](libs/apex-dsp/README.md) | Framework-free C++ DSP shared by the plugins, with offline tests and tools | — |
 | [**apex-ui**](#design-system-apex-ui) | The shared design system: rendered hardware controls, header, presets, A/B, undo, tuner | — |

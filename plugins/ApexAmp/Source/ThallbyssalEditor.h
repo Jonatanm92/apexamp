@@ -34,12 +34,13 @@ protected:
     void handleSettingsItem (int) override;
 
 private:
-    enum Module { drop, gate, boost, amp, shape, cab, fx, numModules };
+    enum Module { drop, gate, boost, amp, shape, cab, fx, band, numModules };
 
     struct Panel;
     struct TextField;
     struct StatusCell;
     struct MatchStatus;
+    struct DragTile;
 
     apex::ui::abyss::Knob& addKnob (juce::Component& parent, const juce::String& paramId, const juce::String& label,
                                     juce::Point<float> centre, float diameter, const juce::String& tip);
@@ -97,6 +98,10 @@ private:
     std::unique_ptr<juce::SliderParameterAttachment> echoTimeAttachment;
     std::unique_ptr<juce::ParameterAttachment> syncWatcher;
     apex::ui::abyss::HBar* punchBar = nullptr;
+    apex::ui::abyss::HitStrip* hitStrip = nullptr;
+    std::array<apex::ui::abyss::GlowButton*, 2> kickModeButtons {};
+    std::array<DragTile*, 3> dragTiles {};
+    std::uint32_t seenHits = 0;
     std::vector<double> taps;
     float lastCabMix = 100.0f;
     bool fxRememberEcho = false, fxRememberAbyss = true;

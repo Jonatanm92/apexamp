@@ -653,6 +653,46 @@ void Radar::paint (juce::Graphics& g)
 }
 
 //==============================================================================
+void HitStrip::advance (float fraction)
+{
+    for (auto& h : hits)
+        h.x -= fraction;
+    hits.erase (std::remove_if (hits.begin(), hits.end(), [] (const Hit& h) { return h.x < 0.0f; }), hits.end());
+    repaint();
+}
+
+void HitStrip::paint (juce::Graphics& g)
+{
+    const auto b = getLocalBounds().toFloat();
+    g.setColour (juce::Colour (0xff050403));
+    g.fillRect (b);
+    g.setColour (colours::rim);
+    g.drawRect (b, 1.0f);
+    // beat grid
+    for (int i = 1; i < 16; ++i)
+    {
+        const float x = b.getX() + b.getWidth() * (float) i / 16.0f;
+        g.setColour (colours::rim.withAlpha (i % 4 == 0 ? 0.7f : 0.3f));
+        g.drawLine (x, b.getY() + 3.0f, x, b.getBottom() - 3.0f, 0.6f);
+    }
+    g.setColour (colours::emberDim);
+    g.drawLine (b.getX(), b.getBottom() - 4.0f, b.getRight(), b.getBottom() - 4.0f, 1.0f);
+
+    for (const auto& h : hits)
+    {
+        const float x = b.getX() + b.getWidth() * h.x;
+        const float height = (b.getHeight() - 10.0f) * (0.35f + 0.65f * h.velocity);
+        const float age = juce::jlimit (0.0f, 1.0f, h.x);
+        juce::Path bar;
+        bar.startNewSubPath (x, b.getBottom() - 4.0f);
+        bar.lineTo (x, b.getBottom() - 4.0f - height);
+        glowStroke (g, bar, 2.0f, colours::ember.interpolatedWith (colours::emberHot, age * 0.6f), 0.3f + 0.7f * age);
+    }
+    if (! hits.empty() && hits.back().x > 0.96f)
+        glowSpot (g, { b.getRight() - 4.0f, b.getBottom() - 6.0f }, b.getHeight() * 0.8f, colours::ember, 0.6f);
+}
+
+//==============================================================================
 void Scope::paint (juce::Graphics& g)
 {
     const auto b = getLocalBounds().toFloat();

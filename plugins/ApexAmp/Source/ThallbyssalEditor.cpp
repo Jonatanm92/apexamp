@@ -152,6 +152,79 @@ struct ThallbyssalEditor::StatusCell : public juce::Component,
     bool hot = false, caption;
 };
 
+/** A file you can drag out of the plugin into the DAW (or click to reveal):
+    the last riff's DI, bass or kick MIDI. */
+struct ThallbyssalEditor::DragTile : public juce::Component,
+                                     public juce::SettableTooltipClient
+{
+    DragTile (juce::String n, juce::String s, Icon i) : name (std::move (n)), sub (std::move (s)), icon (i)
+    {
+        setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+    }
+
+    std::function<juce::File()> makeFile;
+
+    void paint (juce::Graphics& g) override
+    {
+        auto b = getLocalBounds().toFloat().reduced (1.0f);
+        const bool over = isMouseOver();
+        g.setColour (juce::Colour (0xff070504).withAlpha (0.9f));
+        g.fillRoundedRectangle (b, 3.0f);
+        juce::Path border;
+        border.addRoundedRectangle (b, 3.0f);
+        float dash[] = { 4.0f, 3.0f };
+        juce::Path dashed;
+        juce::PathStrokeType (1.0f).createDashedStroke (dashed, border, dash, 2);
+        if (over || flash > 0.0f)
+            abyss::glowStroke (g, border, 1.0f, col::ember, juce::jmax (0.5f, flash));
+        else
+        {
+            g.setColour (col::rimLight);
+            g.fillPath (dashed);
+        }
+        const auto iconArea = b.removeFromLeft (b.getHeight()).reduced (10.0f);
+        abyss::drawIcon (g, icon, iconArea, over ? col::emberHot : col::ember, over ? 0.6f : 0.25f);
+        auto text = b.reduced (2.0f, 6.0f);
+        abyss::glowText (g, name, fnt::labelBold (15.0f, 0.12f), text.removeFromTop (text.getHeight() * 0.55f), juce::Justification::centredLeft,
+                         over ? col::emberHot : col::bone, over ? 0.4f : 0.0f);
+        abyss::glowText (g, status.isNotEmpty() ? status : sub, fnt::label (11.0f, 0.12f), text, juce::Justification::centredLeft, col::ash, 0.0f);
+    }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (dragging || e.getDistanceFromDragStart() < 5 || ! makeFile)
+            return;
+        dragging = true;
+        const auto file = makeFile();
+        if (file.existsAsFile())
+            juce::DragAndDropContainer::performExternalDragDropOfFiles ({ file.getFullPathName() }, false, this);
+    }
+
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        if (! dragging && getLocalBounds().contains (e.getPosition()) && makeFile)
+        {
+            const auto file = makeFile();
+            if (file.existsAsFile())
+                file.revealToUser();
+        }
+        dragging = false;
+    }
+
+    void mouseEnter (const juce::MouseEvent&) override { repaint(); }
+    void mouseExit (const juce::MouseEvent&) override  { repaint(); }
+
+    void setStatus (const juce::String& s) { if (s != status) { status = s; repaint(); } }
+    void pulse() { flash = 1.0f; repaint(); }
+    void tick() { if (flash > 0.0f) { flash = juce::jmax (0.0f, flash - 0.05f); repaint(); } }
+
+private:
+    juce::String name, sub, status;
+    Icon icon;
+    bool dragging = false;
+    float flash = 0.0f;
+};
+
 /** "MATCH STATUS" line: icon + verdict. */
 struct ThallbyssalEditor::MatchStatus : public juce::Component
 {
@@ -713,7 +786,7 @@ void ThallbyssalEditor::buildModules()
         auto& p = *makePanel (shape, "CHUG FORGE");
         addKnob (p, "chug", "CHUG", { 450.0f, 360.0f }, 70.0f, "Chug: punch on every pick attack, read from the DI before the amp; held notes stay untouched");
         addKnob (p, "chugFreq", "FREQUENCY", { cx, 360.0f }, 70.0f, "Where the punch sits: low for thump, high for pick click");
-        addKnob (p, "dirt", "LOW DIRT", { 750.0f, 360.0f }, 70.0f, "Low dirt: parallel growl on the low end, after the amp");
+        addKnob (p, "dirt", "GROWL", { 750.0f, 360.0f }, 70.0f, "Growl: a parallel, envelope-following fuzz on the low end only, after the amp");
         addToggle (p, "shapeOn", "ENGAGE", { cx - 80.0f, 560.0f, 160.0f, 40.0f }, "Shape on / off");
         auto bar = std::make_unique<abyss::HBar>();
         bar->setBounds (450, 486, 300, 8);
@@ -777,10 +850,86 @@ void ThallbyssalEditor::buildModules()
         };
     }
 
+    // ---- BAND: the legion (kick + bass that follow the riff) ---------------------------
+    {
+        auto& p = *makePanel (band, "THE LEGION");
+        addToggle (p, "legionOn", "ENGAGE", { 372.0f, 236.0f, 104.0f, 30.0f }, "The Legion on / off: a kick and a bass that play along with your riff");
+        const char* modes[] = { "CHUGS", "ALL NOTES" };
+        const char* modeTips[] = { "The kick follows the low-string notes (the chugs) and ignores leads",
+                                   "The kick follows every picked note" };
+        for (int i = 0; i < 2; ++i)
+        {
+            auto b = std::make_unique<abyss::GlowButton> (modes[i], abyss::GlowButton::Style::tab);
+            b->setBounds (juce::Rectangle<float> (i == 0 ? 674.0f : 752.0f, 236.0f, i == 0 ? 74.0f : 84.0f, 30.0f).toNearestInt());
+            b->setTooltip (modeTips[i]);
+            b->onClick = [this, i] { setParam ("kickMode", (float) i, "Kick follows"); };
+            p.addAndMakeVisible (*b);
+            kickModeButtons[(size_t) i] = b.get();
+            owned.push_back (std::move (b));
+        }
+        auto strip = std::make_unique<abyss::HitStrip>();
+        strip->setBounds (372, 280, 456, 62);
+        p.addAndMakeVisible (*strip);
+        hitStrip = strip.get();
+        owned.push_back (std::move (strip));
+
+        const float d = 50.0f, y = 446.0f;
+        addKnob (p, "kickLevel", "KICK", { 412.0f, y }, d, "Kick level");
+        addKnob (p, "kickFeel", "FEEL", { 508.0f, y }, d, "Feel: how light a pick attack still gets a kick");
+        addKnob (p, "kickTone", "TONE", { 604.0f, y }, d, "Kick tone: deep and round to tight and clicky");
+        addKnob (p, "bassLevel", "BASS", { 712.0f, y }, d, "Bass level: the riff doubled an octave under the guitar");
+        addKnob (p, "bassGrit", "GRIT", { 808.0f, y }, d, "Bass grit: clean sub to driven mids");
+
+        // the last riff, as files to drag into the DAW
+        const struct { const char* name; const char* sub; Icon icon; int which; } tiles[] = {
+            { "RIFF DI", "DRAG INTO YOUR DAW", Icon::load, 0 },
+            { "BASS", "DRAG INTO YOUR DAW", Icon::echo, 1 },
+            { "KICK MIDI", "ONTO YOUR DRUMS", Icon::kick, 2 } };
+        for (int i = 0; i < 3; ++i)
+        {
+            auto tile = std::make_unique<DragTile> (tiles[i].name, tiles[i].sub, tiles[i].icon);
+            tile->setBounds (juce::Rectangle<float> (372.0f + (float) i * 154.0f, 524.0f, 148.0f, 50.0f).toNearestInt());
+            tile->setTooltip ("The last riff you played (up to 30 s, silence trimmed). Drag it into your DAW, or click to show the file.");
+            const int which = tiles[i].which;
+            auto* raw = tile.get();
+            tile->makeFile = [this, which, raw]
+            {
+                const auto files = proc.exportRiff();
+                if (! files.ok)
+                {
+                    raw->setStatus ("PLAY A RIFF FIRST");
+                    return juce::File();
+                }
+                raw->setStatus (juce::String (files.seconds, 1) + " S" + (which == 2 ? "  " + juce::String::charToString (0x00B7) + "  "
+                                                                                       + juce::String (files.numKicks) + " HITS" : juce::String()));
+                raw->pulse();
+                return which == 0 ? files.di : (which == 1 ? files.bass : files.kicks);
+            };
+            p.addAndMakeVisible (*tile);
+            dragTiles[(size_t) i] = tile.get();
+            owned.push_back (std::move (tile));
+        }
+
+        p.extra = [] (juce::Graphics& g)
+        {
+            abyss::glowText (g, "EVERY HIT YOU PLAY, IN TIME", fnt::label (11.0f, 0.2f), { 372.0f, 344.0f, 456.0f, 14.0f },
+                             juce::Justification::centredLeft, col::ash, 0.0f);
+            for (auto [x0, x1, name] : { std::tuple<float, float, const char*> { 372.0f, 644.0f, "KICK" }, { 672.0f, 846.0f, "BASS" } })
+            {
+                const float yy = 500.0f;
+                g.setColour (col::rim);
+                g.drawLine (x0, yy, x1, yy, 0.8f);
+                abyss::glowText (g, name, fnt::serif (11.0f, 0.4f), { x0, yy - 16.0f, x1 - x0, 12.0f }, juce::Justification::centred, col::ash, 0.0f);
+            }
+            abyss::glowText (g, "PLAY A RIFF. THE LEGION FOLLOWS.", fnt::serifLight (12.0f, 0.42f), { centrePanel.getX(), 600.0f, centrePanel.getWidth(), 18.0f },
+                             juce::Justification::centred, col::ember, 0.3f);
+        };
+    }
+
     // ---- CAB (the chamber is always on the right; its centre view lists the IRs) ------
     {
         auto& p = *makePanel (cab, "THE CHAMBER");
-        const char* names[] = { "ASHEN", "MESHUGGAH", "PDI-09", "USER" };
+        const char* names[] = { "CINDER 4x12", "IRON 4x12", "OBSIDIAN 4x12", "USER IR" };
         for (int i = 0; i < 4; ++i)
         {
             auto b = std::make_unique<abyss::GlowButton> (Icon::cab, names[i], abyss::GlowButton::Style::tab);
@@ -877,10 +1026,11 @@ void ThallbyssalEditor::buildChain()
     auto& host = *backdrop;
     const struct { Module m; const char* name; Icon icon; } order[] = {
         { drop, "DROP", Icon::drop }, { gate, "GATE", Icon::gate }, { boost, "BOOST", Icon::boost }, { amp, "AMP", Icon::amp },
-        { shape, "SHAPE", Icon::shape }, { cab, "CAB", Icon::cab }, { fx, "FX", Icon::fx } };
+        { shape, "SHAPE", Icon::shape }, { cab, "CAB", Icon::cab }, { fx, "FX", Icon::fx }, { band, "BAND", Icon::kick } };
+    constexpr int count = (int) std::size (order);
 
-    const float x0 = 112.0f, x1 = 1088.0f, w = 104.0f, y = 686.0f, h = 78.0f;
-    const float gap = (x1 - x0 - 7.0f * w) / 8.0f;
+    const float x0 = 112.0f, x1 = 1088.0f, w = 98.0f, y = 686.0f, h = 78.0f;
+    const float gap = (x1 - x0 - (float) count * w) / (float) (count + 1);
 
     auto in = std::make_unique<abyss::Jack> ("INPUT");
     in->setBounds (40, 684, 70, 82);
@@ -903,7 +1053,7 @@ void ThallbyssalEditor::buildChain()
     };
     owned.push_back (std::move (out));
 
-    for (int i = 0; i <= 7; ++i)
+    for (int i = 0; i <= count; ++i)
     {
         auto link = std::make_unique<abyss::ChainLink>();
         const float lx = x0 + (float) i * (w + gap);
@@ -913,7 +1063,7 @@ void ThallbyssalEditor::buildChain()
         links[(size_t) i] = link.get();
         owned.push_back (std::move (link));
     }
-    for (int i = 0; i < 7; ++i)
+    for (int i = 0; i < count; ++i)
     {
         auto block = std::make_unique<abyss::ChainBlock> (order[i].name, order[i].icon);
         block->setBounds (juce::Rectangle<float> (x0 + gap + (float) i * (w + gap), y, w, h).toNearestInt());
@@ -983,6 +1133,7 @@ void ThallbyssalEditor::toggleModule (int m)
         case boost: flip ("boostOn", "Boost"); break;
         case shape: flip ("shapeOn", "Shape"); break;
         case amp:   break;   // the amp is the rig: power lives on the output ring
+        case band:  flip ("legionOn", "Legion"); break;
         case cab:
         {
             const float mix = param ("cabMix");
@@ -1179,6 +1330,21 @@ void ThallbyssalEditor::tick()
         k->setVisible (blend);
     if (punchBar != nullptr)
         punchBar->setValue (param ("shapeOn") > 0.5f ? proc.chugPunch.load() : 0.0f);
+    {
+        const std::uint32_t total = proc.getLegionHits();
+        if (total != seenHits)
+        {
+            hitStrip->addHit (proc.getLegionLastVelocity());
+            seenHits = total;
+        }
+        if (selected == band)
+            hitStrip->advance (1.0f / (4.0f * 30.0f));   // four seconds across
+        for (auto* t : dragTiles)
+            t->tick();
+        const int kickMode = juce::roundToInt (param ("kickMode"));
+        for (int i = 0; i < 2; ++i)
+            kickModeButtons[(size_t) i]->setToggleState (i == kickMode, juce::dontSendNotification);
+    }
     // live readouts in the panel (drop display, gate state, echo time, blend trims)
     {
         juce::String sig;
@@ -1213,7 +1379,7 @@ void ThallbyssalEditor::tick()
     const float outAct = power ? juce::jlimit (0.0f, 1.0f, (outDb + 48.0f) / 42.0f) : 0.0f;
     const bool moduleOn[numModules] = { param ("dropOn") > 0.5f, param ("gateOn") > 0.5f, param ("boostOn") > 0.5f, power,
                                         param ("shapeOn") > 0.5f, param ("cabMix") > 0.5f,
-                                        param ("delayOn") > 0.5f || param ("reverbOn") > 0.5f };
+                                        param ("delayOn") > 0.5f || param ("reverbOn") > 0.5f, param ("legionOn") > 0.5f };
     {
         const int st = juce::roundToInt (param ("dropShift"));
         const char* rigs[] = { "BITE", "BODY", "EDGE", "USER" };
@@ -1225,6 +1391,8 @@ void ThallbyssalEditor::tick()
         blocks[amp]->setValueText (param ("rigMode") > 0.5f ? juce::String ("BLEND") : juce::String (rigs[juce::jlimit (0, 3, juce::roundToInt (param ("rig")))]));
         blocks[shape]->setValueText ("CHUG " + juce::String (juce::roundToInt (param ("chug"))));
         blocks[cab]->setValueText (ir->getCurrentValueAsText().toUpperCase());
+        blocks[band]->setValueText (param ("legionOn") > 0.5f ? (param ("kickMode") > 0.5f ? juce::String ("ALL NOTES") : juce::String ("CHUGS"))
+                                                              : juce::String ("OFF"));
         blocks[fx]->setValueText (echoOn && abyssOn ? juce::String ("ECHO + ABYSS") : (echoOn ? juce::String ("ECHO") : (abyssOn ? juce::String ("ABYSS") : juce::String ("OFF"))));
     }
     for (int m = 0; m < numModules; ++m)
@@ -1232,8 +1400,8 @@ void ThallbyssalEditor::tick()
         blocks[(size_t) m]->setEnabledState (moduleOn[m] && power);
         blocks[(size_t) m]->setActivity (m <= amp ? inAct : outAct);
     }
-    for (int i = 0; i <= 7; ++i)
-        links[(size_t) i]->setLevel (i <= 4 ? inAct : outAct);
+    for (int i = 0; i <= numModules; ++i)
+        links[(size_t) i]->setLevel (i <= 3 ? inAct : outAct);
     inputJack->setLevel (inAct);
     outputJack->setToggleState (power, juce::dontSendNotification);
     outputJack->setLevel (outAct);
@@ -1263,7 +1431,7 @@ void ThallbyssalEditor::tick()
     depthCell->set ("TUNING", dropOn ? noteName (4 + st) + (st <= -12 ? minus (" -1 OCT") : juce::String (" STD")) : juce::String ("E STD"),
                     dropOn ? "DROP " + minus ((st > 0 ? "+" : "") + juce::String (st)) + " ST  " + juce::String::charToString (0x00B7) + "  "
                                  + juce::String (proc.getLatencyMs(), 1) + " MS"
-                           : juce::String ("DROP OFF  ") + juce::String::charToString (0x00B7) + "  CLICK DROP TO GO LOWER");
+                           : juce::String ("DROP OFF  ") + juce::String::charToString (0x00B7) + "  CLICK DROP");
 
     outputGauge->setValue (juce::jlimit (0.0f, 1.0f, (outDb + 48.0f) / 48.0f));
     outputCell->set ("OUTPUT", outDb > -99.0f ? minus (juce::String (outDb, 1)) + " dB" : juce::String::charToString (0x2212) + juce::String::charToString (0x221e),
@@ -1272,5 +1440,5 @@ void ThallbyssalEditor::tick()
     if (outDb >= hotPeak) { hotPeak = outDb; hotFrames = 45; }
     else if (--hotFrames < 0) hotPeak = juce::jmax (outDb, hotPeak - 0.5f);
     const bool hot = hotPeak > -1.0f;
-    hotCell->set (hot ? "HOT SIGNAL" : "CLEAN", hotPeak > -99.0f ? minus (juce::String (hotPeak, 1)) + " dB" : juce::String(), hot ? "BACK OFF THE MASTER" : "HEADROOM OK", hot);
+    hotCell->set (hot ? "HOT" : "CLEAN", hotPeak > -99.0f ? minus (juce::String (hotPeak, 1)) + " dB" : juce::String(), hot ? "LOWER THE MASTER" : "HEADROOM OK", hot);
 }

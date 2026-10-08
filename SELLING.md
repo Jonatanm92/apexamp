@@ -5,16 +5,23 @@ as a commercial product. It is informational, not legal advice.
 
 ## Licensing
 
-- **JUCE**: ApexAmp is built on JUCE. A commercial product requires a paid JUCE
-  licence (Indie or Pro) unless it qualifies for the free/GPL tier. The GPL
-  option is not compatible with a closed-source paid plugin, so a commercial
-  JUCE licence is needed before selling. See https://juce.com/get-juce.
+- **JUCE 8**: the free Starter licence covers closed-source commercial products
+  while revenue over the last 12 months stays at or below $20,000 (no splash
+  screen required); above that, Indie ($800 perpetual, up to $300,000) or Pro.
+  Confirm against the current JUCE EULA before release.
+- **VST3 SDK**: MIT licensed since VST 3.8 (October 2025); keep the notice.
 - **NeuralAmpModelerCore**: MIT licensed — free to use commercially. Keep the
   MIT licence text in the distribution / about box attribution.
 - **Bundled NAM rigs (Bite / Body / Edge)**: these are the owner's own trained
   captures and are cleared for commercial distribution.
-- **Bundled cabinet IRs (Ashen / Meshuggah / PDI-09)**: confirm distribution
-  rights for each IR before shipping. Replace any that are not cleared.
+- **Bundled cabinet IRs (shown as Cinder / Iron / Obsidian; files
+  ir_ashen / ir_meshuggah / ir_pdi09)**: confirm distribution rights for each IR
+  before shipping and replace any that are not cleared. Product-facing names
+  avoid band, album and competitor names.
+- **Names**: no third-party trademarks in product, feature or preset names
+  (bands, albums, competitors' feature names). The company string in the
+  plugin metadata ("PolychromeNext") is too close to PolyChrome DSP and must be
+  replaced with the final company name before release.
 - **ASIO SDK** (Windows): the Steinberg ASIO SDK is compiled against but not
   redistributed; the resulting binary may be distributed. Review Steinberg's
   licensing terms.

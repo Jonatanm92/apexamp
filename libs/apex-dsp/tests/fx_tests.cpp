@@ -9,6 +9,7 @@
 #include "apex/dsp/AbyssReverb.h"
 #include "apex/dsp/ChugShaper.h"
 #include "apex/dsp/FizzTamer.h"
+#include "apex/dsp/Legion.h"
 #include "apex/dsp/LowDirt.h"
 #include "apex/dsp/StereoDelay.h"
 #include "TestSignals.h"
@@ -600,6 +601,168 @@ void testFizzTamer()
 }
 
 //==============================================================================
+// Hit times placed on the pick (offset - lateness); `liveLate` collects how
+// late each hit is heard live.
+std::vector<double> findHits (const Signal& di, dsp::RiffFollower::Mode mode, int block, std::vector<double>* liveLate = nullptr)
+{
+    dsp::RiffFollower follower;
+    follower.prepare (fs);
+    follower.setMode (mode);
+    follower.setSensitivity (0.5f);
+    std::vector<double> times;
+    for (size_t pos = 0; pos < di.size(); pos += (size_t) block)
+    {
+        const int n = (int) std::min ((size_t) block, di.size() - pos);
+        const int count = follower.process (di.data() + pos, n);
+        for (int h = 0; h < count; ++h)
+        {
+            const auto& hit = follower.getHit (h);
+            times.push_back (((double) (pos + (size_t) hit.offset) - (double) hit.lateness) / fs);
+            if (liveLate != nullptr)
+                liveLate->push_back ((double) hit.lateness / fs);
+        }
+    }
+    return times;
+}
+
+void testLegion()
+{
+    std::printf ("\n[legion]\n");
+
+    // a djent figure on the low string, with octave notes and a lead line in between
+    std::vector<test::Note> notes;
+    const double e = 82.41, sixteenth = 60.0 / 150.0 / 4.0;
+    const int pattern[] = { 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0 };
+    std::vector<double> lowStarts, highStarts;
+    for (int bar = 0; bar < 3; ++bar)
+        for (int i = 0; i < 16; ++i)
+        {
+            const double t = 0.2 + (bar * 16 + i) * sixteenth;
+            if (pattern[i])
+            {
+                notes.push_back ({ e, t, sixteenth * 0.85, true, 0.75f + 0.25f * (float) ((i * 7) % 3) / 2.0f });
+                lowStarts.push_back (t);
+            }
+            else if (i % 3 == 2)
+            {
+                notes.push_back ({ e * 4.0, t, sixteenth * 0.9, false, 0.6f });   // lead note two octaves up
+                highStarts.push_back (t);
+            }
+        }
+    const auto di = test::renderGuitar (notes, fs, 0.4 + 48 * sixteenth + 0.5);
+
+    auto score = [] (const std::vector<double>& hits, const std::vector<double>& starts, double early, double late)
+    {
+        int found = 0;
+        for (double s : starts)
+            for (double h : hits)
+                if (h >= s - early && h <= s + late) { ++found; break; }
+        return found;
+    };
+
+    std::vector<double> late;
+    const auto all = findHits (di, dsp::RiffFollower::Mode::allNotes, 128);
+    const auto chugs = findHits (di, dsp::RiffFollower::Mode::chugs, 128, &late);
+    const int allLow = score (all, lowStarts, 0.002, 0.005), allHigh = score (all, highStarts, 0.002, 0.005);
+    const int chugLow = score (chugs, lowStarts, 0.002, 0.005), chugHigh = score (chugs, highStarts, 0.002, 0.005);
+    // a false hit is one that belongs to no note at all (nothing within 15 ms)
+    auto falseHits = [&] (const std::vector<double>& hits)
+    {
+        int n = 0;
+        for (double h : hits)
+        {
+            bool near = false;
+            for (double st : lowStarts)  near = near || std::abs (h - st) < 0.015;
+            for (double st : highStarts) near = near || std::abs (h - st) < 0.015;
+            n += near ? 0 : 1;
+        }
+        return n;
+    };
+    const int allExtra = falseHits (all), chugExtra = falseHits (chugs);
+    const int chugAny = score (chugs, lowStarts, 0.002, 0.015);
+
+    // how late the kick is heard live in chug mode (the recorder places it on the pick)
+    double worstLate = 0.0, meanLate = 0.0;
+    for (double l : late) { worstLate = std::max (worstLate, l); meanLate += l; }
+    meanLate /= (double) std::max<size_t> (1, late.size());
+    // and how exactly the recorded hits sit on the picks
+    double worstPlacement = 0.0;
+    for (double h : chugs)
+    {
+        double best = 1.0;
+        for (double st : lowStarts) best = std::abs (h - st) < std::abs (best) ? h - st : best;
+        worstPlacement = std::max (worstPlacement, std::abs (best));
+    }
+
+    std::printf ("  all notes: %d/%zu low, %d/%zu lead within 5 ms, %d false\n", allLow, lowStarts.size(), allHigh, highStarts.size(), allExtra);
+    std::printf ("  chugs:     %d/%zu low within 5 ms (%d at all), %d/%zu lead, %d false, heard live %.1f ms after the pick (worst %.1f ms), recorded within %.1f ms\n",
+                 chugLow, lowStarts.size(), chugAny, chugHigh, highStarts.size(), chugExtra, meanLate * 1000.0, worstLate * 1000.0, worstPlacement * 1000.0);
+    CHECK (score (all, lowStarts, 0.002, 0.015) >= (int) lowStarts.size() * 95 / 100
+           && score (all, highStarts, 0.002, 0.015) >= (int) highStarts.size() * 80 / 100, "all-notes mode missed notes");
+    CHECK (chugAny >= (int) lowStarts.size() * 95 / 100, "chug mode missed %d chugs", (int) lowStarts.size() - chugAny);
+    CHECK (chugLow >= (int) lowStarts.size() * 90 / 100, "only %d chugs recorded within 5 ms of the pick", chugLow);
+    CHECK (chugHigh <= (int) highStarts.size() / 10, "chug mode followed %d lead notes", chugHigh);
+    CHECK (allExtra == 0 && chugExtra == 0, "false hits (%d / %d)", allExtra, chugExtra);
+    CHECK (worstLate < 0.012, "chug hits heard up to %.1f ms late", worstLate * 1000.0);
+    CHECK (findHits (di, dsp::RiffFollower::Mode::chugs, 333) == chugs, "hits depend on the block size");
+
+    // the kick: weight below 120 Hz, a click on top, gone within ~0.4 s, fast doubles stay bounded
+    {
+        dsp::KickSynth kick;
+        kick.prepare (fs);
+        kick.setTone (0.5f);
+        Signal one (at (0.6), 0.0f);
+        kick.trigger (1.0f);
+        for (auto& v : one) v = kick.next();
+        const double total = energy (one, 0, one.size());
+        const double lowShare = energy (filtered (one, test::Biquad::lowpass (fs, 120.0, 0.7)), 0, one.size()) / total;
+        const double clickShare = energy (filtered (one, test::Biquad::bandpass (fs, 3800.0, 0.8)), 0, at (0.02)) / total;
+        const float tail = peak (one, at (0.45), at (0.6));
+
+        Signal roll (at (2.0), 0.0f);
+        for (size_t i = 0; i < roll.size(); ++i)
+        {
+            if (i % at (0.045) == 0) kick.trigger (1.0f);
+            roll[i] = kick.next();
+        }
+        std::printf ("  kick: %.0f %% of the energy below 120 Hz, click %.1f %%, tail %.1e, 22 hits/s peak %.2f\n",
+                     lowShare * 100.0, clickShare * 100.0, tail, peak (roll));
+        CHECK (lowShare > 0.5, "kick has only %.0f %% low end", lowShare * 100.0);
+        CHECK (clickShare > 0.003, "kick has no click");
+        CHECK (tail < 1.0e-3f, "kick rings too long (%g)", tail);
+        CHECK (finite (roll) && peak (roll) < 1.0f, "fast kicks overload (%g)", peak (roll));
+        writeListening ("legion_kick_roll", roll);
+    }
+
+    // the bass: an octave (plus the drop) below the guitar
+    {
+        const auto note = test::renderGuitar ({ { 110.0, 0.05, 1.6 } }, fs, 1.8);
+        for (float shift : { -12.0f, -17.0f })
+        {
+            dsp::BassFollower bass;
+            bass.prepare (fs, 256);
+            bass.setSemitones (shift);
+            bass.setGrit (0.5f);
+            Signal out (note.size());
+            for (size_t pos = 0; pos < note.size(); pos += 256)
+            {
+                const int n = (int) std::min ((size_t) 256, note.size() - pos);
+                bass.process (note.data() + pos, out.data() + pos, n);
+            }
+            const double expected = 110.0 * std::pow (2.0, shift / 12.0);
+            const double measured = test::estimatePitch (out, at (0.6), at (0.5), fs, 25.0, 400.0);
+            const double cents = measured > 0.0 ? 1200.0 * std::log2 (measured / expected) : 9999.0;
+            std::printf ("  bass %+.0f st: %.1f Hz (expected %.1f, %+.0f cents), peak %.2f\n", shift, measured, expected, cents, peak (out));
+            CHECK (std::abs (cents) < 25.0, "bass at %.1f Hz instead of %.1f", measured, expected);
+            CHECK (finite (out) && peak (out) < 2.0f, "bass level out of range (%g)", peak (out));
+            if (shift < -12.0f)
+                writeListening ("legion_bass", out);
+        }
+    }
+    writeListening ("legion_riff_di", di);
+}
+
+//==============================================================================
 void measureCpu()
 {
     std::printf ("\n[cpu, 48 kHz stereo, 128-sample blocks]\n");
@@ -616,6 +779,23 @@ void measureCpu()
     time ("chug", [] (Signal& l, Signal&) { l = runChug (l, l, 1.0f, 800.0f, 128); });
     time ("low dirt", [] (Signal& l, Signal&) { l = runDirt (l, 1.0f); });
     time ("fizz tamer", [] (Signal& l, Signal&) { l = runFizz (l, 1.0f); });
+    time ("legion", [] (Signal& l, Signal&)
+    {
+        dsp::RiffFollower follower;
+        dsp::KickSynth kick;
+        dsp::BassFollower bass;
+        follower.prepare (fs);
+        kick.prepare (fs);
+        bass.prepare (fs, 128);
+        Signal out (128);
+        for (size_t pos = 0; pos + 128 <= l.size(); pos += 128)
+        {
+            const int hits = follower.process (l.data() + pos, 128);
+            for (int h = 0; h < hits; ++h) kick.trigger (follower.getHit (h).velocity);
+            bass.process (l.data() + pos, out.data(), 128);
+            for (int i = 0; i < 128; ++i) l[pos + (size_t) i] = out[(size_t) i] + kick.next();
+        }
+    });
     time ("delay", [] (Signal& l, Signal& r)
     {
         dsp::StereoDelay d;
@@ -641,6 +821,7 @@ int main (int argc, char** argv)
     testDelay();
     testReverb();
     testFizzTamer();
+    testLegion();
     measureCpu();
 
     std::printf ("\n%s (%d failure%s)\n", failures == 0 ? "PASS" : "FAIL", failures, failures == 1 ? "" : "s");

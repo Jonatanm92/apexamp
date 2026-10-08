@@ -13,10 +13,12 @@
 #include <cmath>
 
 #include "NAM/get_dsp.h"
+#include "RiffRecorder.h"
 #include "BinaryData.h"
 #include "apex/dsp/AbyssReverb.h"
 #include "apex/dsp/ChugShaper.h"
 #include "apex/dsp/FizzTamer.h"
+#include "apex/dsp/Legion.h"
 #include "apex/dsp/LowDirt.h"
 #include "apex/dsp/PitchShifter.h"
 #include "apex/dsp/StereoDelay.h"
@@ -30,7 +32,7 @@
  *   - SINGLE mode: run one rig on its own, or
  *   - BLEND mode : sum all three loudness-matched rigs (layered tone).
  * After the amp stage the signal passes through the amp EQ (Bass / Mid /
- * Treble, flat at 0 dB), the Shape pedal (Chug + Low Dirt) and the selected
+ * Treble, flat at 0 dB), the Shape pedal (Chug + Growl) and the selected
  * cabinet IR, then the stereo Void unit (Echo delay and Abyss reverb, both
  * with spillover).
  *
@@ -77,7 +79,14 @@ public:
         float   depthDb      = 0.0f;       // low resonance after the amp, flat at 0 dB
         float   highCutHz    = 20000.0f;   // post-cab low-pass (20 kHz = off)
         float   fizz         = 0.0f;       // 0..1 dynamic resonance suppression after the cab
-        bool    shapeOn      = false;      // Shape pedal: Chug + Low Dirt
+        bool    legionOn     = false;      // The Legion: kick + bass that follow the riff
+        bool    kickAllNotes = false;      // false = follow the chugs (low strings) only
+        float   kickLevel    = 0.7f;       // 0..1
+        float   kickFeel     = 0.5f;       // 0..1 detection sensitivity
+        float   kickTone     = 0.5f;       // 0..1
+        float   bassLevel    = 0.6f;       // 0..1
+        float   bassGrit     = 0.4f;       // 0..1
+        bool    shapeOn      = false;      // Shape pedal: Chug + Growl
         float   chug         = 0.5f;       // 0..1
         float   chugFreqHz   = 700.0f;
         float   dirt         = 0.25f;      // 0..1
@@ -219,6 +228,18 @@ public:
         gateHoldCounter = 0;
         tightLp1 = tightLp2 = 0.0;
         screamer.prepare (sampleRate, maxBlockSize);
+        riffFollower.prepare (sampleRate);
+        kickSynth.prepare (sampleRate);
+        bassFollower.prepare (sampleRate, maxBlockSize);
+        legionDi.assign ((size_t) maxBlockSize, 0.0f);
+        bassBuf.assign ((size_t) maxBlockSize, 0.0f);
+        kickGain.reset (sampleRate, 0.03);
+        bassGain.reset (sampleRate, 0.05);
+        kickGain.setCurrentAndTargetValue (0.0f);
+        bassGain.setCurrentAndTargetValue (0.0f);
+        pendingKicks = 0;
+        riffRecorder.prepare (sampleRate, maxBlockSize);
+        riffRecorder.setBassLatency (bassFollower.getLatencySamples());
         fizzTamer.prepare (sampleRate);
         fizzBuf.assign ((size_t) maxBlockSize, 0.0f);
 
@@ -251,6 +272,10 @@ public:
         tightLp1 = tightLp2 = 0.0;
         screamer.reset();
         fizzTamer.reset();
+        riffFollower.reset();
+        kickSynth.reset();
+        bassFollower.reset();
+        pendingKicks = 0;
         dropMain.reset();
         dropSubShifter.reset();
         subLowpass.reset();
@@ -379,6 +404,13 @@ public:
                 sum += buffer.getReadPointer (ch)[i];
             dropIn[(size_t) i] = sum / (float) numChannels * (float) inGain;
         }
+        {
+            // the undropped DI for the Legion, after the trim but not the amp's gain,
+            // so cranking the amp does not turn the bass up
+            const float toTrimOnly = (float) juce::Decibels::decibelsToGain (-(double) p.inputGainDb);
+            for (int i = 0; i < n; ++i)
+                legionDi[(size_t) i] = dropIn[(size_t) i] * toTrimOnly;
+        }
 
         processDrop (p, n);
 
@@ -472,7 +504,7 @@ public:
         for (auto& band : ampEq)
             band.process (mixBuf.data(), n);
 
-        // ---- 2.6) Shape pedal: Chug (dynamic punch) + Low Dirt ------------------
+        // ---- 2.6) Shape pedal: Chug (dynamic punch) + Growl ------------------
         // Amounts glide to zero when the pedal is off; at zero both are exact
         // bypass, so presets without Shape sound exactly as before.
         chugShaper.setAmount (p.shapeOn ? p.chug : 0.0f);
@@ -603,11 +635,23 @@ public:
                 std::copy (left, left + n, buffer.getWritePointer (ch));
         }
 
+        // ---- 7.5) The Legion: kick on the chugs, bass an octave under the riff ------
+        processLegion (buffer, p, n, numChannels);
+        riffRecorder.pushBlock (legionDi.data(), p.legionOn ? bassBuf.data() : nullptr, n);
+
         // ---- 8) Output gain -----------------------------------------------------
         buffer.applyGain ((float) outGain);
     }
 
     bool isReady() const noexcept { return prepared; }
+
+    /** Writes the last riff (DI, bass, kick MIDI) into `folder` (message thread). */
+    RiffRecorder::Files exportRiff (const juce::File& folder, double bpm) const { return riffRecorder.exportRiff (folder, bpm); }
+    std::int64_t getRiffLastSound() const noexcept { return riffRecorder.getLastSound(); }
+
+    /** Kick hits since prepare (for the editor's hit display) and the last velocity. */
+    std::atomic<std::uint32_t> legionHits { 0 };
+    std::atomic<float> legionLastVelocity { 0.0f };
 
     /** Chug punch envelope (0..1) of the last block, for the editor. */
     float getChugPunch() const noexcept { return chugShaper.getPunch(); }
@@ -784,6 +828,61 @@ private:
             else if (b == 2) ampEq[2].setShelf (sampleRate, 2600.0, gains[2], true);
             else             ampEq[3].setPeak (sampleRate, 85.0, 1.1, gains[3]);   // power-amp style resonance
         }
+    }
+
+    // The Legion, mixed under the finished guitar (before the master).
+    void processLegion (juce::AudioBuffer<float>& buffer, const Params& p, int n, int numChannels)
+    {
+        kickGain.setTargetValue (p.legionOn ? 0.3f * p.kickLevel : 0.0f);
+        bassGain.setTargetValue (p.legionOn ? 0.9f * p.bassLevel : 0.0f);
+        const bool bassAudible = p.legionOn || bassGain.isSmoothing();
+        if (! p.legionOn && ! kickSynth.isActive() && ! bassAudible && pendingKicks == 0)
+            return;
+
+        if (p.legionOn)
+        {
+            riffFollower.setMode (p.kickAllNotes ? apex::dsp::RiffFollower::Mode::allNotes : apex::dsp::RiffFollower::Mode::chugs);
+            riffFollower.setSensitivity (p.kickFeel);
+            kickSynth.setTone (p.kickTone);
+            // the guitar comes out later by the drop engine's latency: so do the kicks
+            const int delay = p.dropOn ? dropMain.getLatencySamples() : 0;
+            const int hits = riffFollower.process (legionDi.data(), n);
+            for (int h = 0; h < hits && pendingKicks < (int) kickQueue.size(); ++h)
+            {
+                const auto& hit = riffFollower.getHit (h);
+                kickQueue[(size_t) pendingKicks++] = { hit.offset + delay, hit.velocity };
+                riffRecorder.pushKick (hit.offset, hit.lateness, hit.velocity);
+                legionHits.fetch_add (1, std::memory_order_relaxed);
+                legionLastVelocity.store (hit.velocity, std::memory_order_relaxed);
+            }
+        }
+        if (bassAudible)
+        {
+            bassFollower.setSemitones ((p.dropOn ? p.dropShift : 0.0f) - 12.0f);
+            bassFollower.setGrit (p.bassGrit);
+            bassFollower.process (legionDi.data(), bassBuf.data(), n);
+        }
+        else
+        {
+            std::fill (bassBuf.begin(), bassBuf.begin() + n, 0.0f);
+        }
+
+        for (int i = 0; i < n; ++i)
+        {
+            for (int k = 0; k < pendingKicks; ++k)
+                if (kickQueue[(size_t) k].when == i)
+                    kickSynth.trigger (kickQueue[(size_t) k].velocity);
+            const float v = kickSynth.next() * kickGain.getNextValue() + bassBuf[(size_t) i] * bassGain.getNextValue();
+            for (int ch = 0; ch < numChannels; ++ch)
+                buffer.getWritePointer (ch)[i] += v;
+        }
+
+        // keep the kicks that fall in a later block
+        int kept = 0;
+        for (int k = 0; k < pendingKicks; ++k)
+            if (kickQueue[(size_t) k].when >= n)
+                kickQueue[(size_t) kept++] = { kickQueue[(size_t) k].when - n, kickQueue[(size_t) k].velocity };
+        pendingKicks = kept;
     }
 
     // Drop pedal on the mono, gain-staged DI in dropIn[0..n).
@@ -1114,6 +1213,17 @@ private:
     Screamer screamer;
     apex::dsp::FizzTamer fizzTamer;
     std::vector<float> fizzBuf;
+
+    // The Legion
+    apex::dsp::RiffFollower riffFollower;
+    apex::dsp::KickSynth kickSynth;
+    apex::dsp::BassFollower bassFollower;
+    std::vector<float> legionDi, bassBuf;
+    juce::SmoothedValue<float> kickGain, bassGain;
+    struct PendingKick { int when; float velocity; };
+    std::array<PendingKick, 64> kickQueue {};
+    int pendingKicks = 0;
+    RiffRecorder riffRecorder;
 
     // Drop pedal
     apex::dsp::PitchShifter dropMain, dropSubShifter;

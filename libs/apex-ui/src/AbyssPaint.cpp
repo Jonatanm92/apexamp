@@ -383,6 +383,12 @@ juce::Path iconPath (Icon icon, juce::Rectangle<float> area)
             p.startNewSubPath (0.3f, 0.42f); p.lineTo (0.5f, 0.62f); p.lineTo (0.7f, 0.42f);
             p.startNewSubPath (0.12f, 0.62f); p.lineTo (0.12f, 0.9f); p.lineTo (0.88f, 0.9f); p.lineTo (0.88f, 0.62f);
             break;
+        case Icon::kick:
+            p.addEllipse (0.14f, 0.2f, 0.72f, 0.72f);
+            p.addEllipse (0.34f, 0.4f, 0.32f, 0.32f);
+            line (0.5f, 0.56f, 0.86f, 0.06f);                  // beater
+            p.addEllipse (0.8f, 0.0f, 0.12f, 0.12f);
+            break;
         case Icon::echo:
             for (int i = 0; i < 3; ++i)
                 p.addCentredArc (0.2f, 0.5f, 0.2f + 0.24f * (float) i, 0.2f + 0.24f * (float) i, 0.0f, pi * 0.3f, pi * 0.7f, true);

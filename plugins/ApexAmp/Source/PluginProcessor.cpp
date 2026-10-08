@@ -51,6 +51,13 @@ namespace pid
     constexpr auto highCut    = "highCut";
     constexpr auto inputTarget = "inputTarget";
     constexpr auto fizz       = "fizz";
+    constexpr auto legionOn   = "legionOn";
+    constexpr auto kickMode   = "kickMode";
+    constexpr auto kickLevel  = "kickLevel";
+    constexpr auto kickFeel   = "kickFeel";
+    constexpr auto kickTone   = "kickTone";
+    constexpr auto bassLevel  = "bassLevel";
+    constexpr auto bassGrit   = "bassGrit";
 }
 
 namespace
@@ -135,7 +142,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
 
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { pid::ir, 1 }, "Cabinet IR",
-        StringArray { "Ashen", "Meshuggah", "PDI-09", "User" }, 0));
+        StringArray { "Cinder", "Iron", "Obsidian", "User" }, 0));
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::gateOn, 1 }, "Gate", false));
 
@@ -196,7 +203,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
     layout.add (percent (pid::chug, "Chug", 50.0f));
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::chugFreq, 1 }, "Chug Frequency",
         skewed (100.0f, 4000.0f, 1.0f, 630.0f), 700.0f, AudioParameterFloatAttributes().withLabel ("Hz")));
-    layout.add (percent (pid::dirt, "Low Dirt", 25.0f));
+    layout.add (percent (pid::dirt, "Growl", 25.0f));
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::delayOn, 1 }, "Echo", false));
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { pid::delayTime, 1 }, "Echo Time",
@@ -227,6 +234,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout ApexAmpProcessor::createLayo
 
     // ---- v0.9: Fizz Tamer (dynamic resonance suppression after the cab) -----------
     layout.add (percent (pid::fizz, "Fizz Tamer", 0.0f));
+
+    // ---- v1.0: The Legion (kick + bass that follow the riff), off by default ----------
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid::legionOn, 1 }, "Legion", false));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { pid::kickMode, 1 }, "Kick Follows",
+        StringArray { "Chugs", "All Notes" }, 0));
+    layout.add (percent (pid::kickLevel, "Kick Level", 70.0f));
+    layout.add (percent (pid::kickFeel, "Kick Feel", 50.0f));
+    layout.add (percent (pid::kickTone, "Kick Tone", 50.0f));
+    layout.add (percent (pid::bassLevel, "Bass Level", 60.0f));
+    layout.add (percent (pid::bassGrit, "Bass Grit", 40.0f));
 
     return layout;
 }
@@ -267,6 +284,13 @@ NamEngine::Params ApexAmpProcessor::gatherParams()
     p.depthDb      = get (pid::depth);
     p.highCutHz    = get (pid::highCut);
     p.fizz         = get (pid::fizz) * 0.01f;
+    p.legionOn     = get (pid::legionOn) > 0.5f;
+    p.kickAllNotes = get (pid::kickMode) > 0.5f;
+    p.kickLevel    = get (pid::kickLevel) * 0.01f;
+    p.kickFeel     = get (pid::kickFeel) * 0.01f;
+    p.kickTone     = get (pid::kickTone) * 0.01f;
+    p.bassLevel    = get (pid::bassLevel) * 0.01f;
+    p.bassGrit     = get (pid::bassGrit) * 0.01f;
 
     p.shapeOn      = get (pid::shapeOn) > 0.5f;
     p.chug         = get (pid::chug) * 0.01f;
