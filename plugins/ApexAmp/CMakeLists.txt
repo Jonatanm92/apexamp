@@ -60,7 +60,8 @@ target_compile_definitions(ApexAmp PUBLIC
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
-    NAM_ENABLE_A2_FAST=1)
+    NAM_ENABLE_A2_FAST=1
+    APEX_STORE_URL="${APEX_STORE_URL}")
 
 target_compile_features(ApexAmp PRIVATE cxx_std_20)
 
@@ -106,4 +107,10 @@ if(APEXAMP_BUILD_TESTS)
     target_compile_definitions(riff_capture_check PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
     target_link_libraries(riff_capture_check PRIVATE juce::juce_audio_formats PUBLIC juce::juce_recommended_config_flags)
     add_test(NAME riff_capture COMMAND riff_capture_check)
+
+    juce_add_console_app(licensing_check PRODUCT_NAME "licensing_check")
+    target_sources(licensing_check PRIVATE tools/licensing_check.cpp)
+    target_compile_definitions(licensing_check PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    target_link_libraries(licensing_check PRIVATE apex_ui juce::juce_audio_utils PUBLIC juce::juce_recommended_config_flags)
+    add_test(NAME licensing COMMAND licensing_check)
 endif()

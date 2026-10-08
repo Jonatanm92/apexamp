@@ -21,7 +21,11 @@ option(APEX_BUILD_PLUGINS "Build the JUCE plugins (downloads JUCE)" ON)
 option(APEXAMP_ENABLE_ASIO "Build the Windows Standalone apps with ASIO support" OFF)
 set(ASIO_SDK_DIR "" CACHE PATH "Path to the Steinberg ASIO SDK")
 
+# Where the unlock screen's Buy button goes (empty: no Buy button).
+set(APEX_STORE_URL "" CACHE STRING "Store page opened by the Buy button")
+
 add_subdirectory(libs/apex-dsp)
+add_subdirectory(libs/apex-licence)
 
 if(APEX_BUILD_PLUGINS)
     # --------------------------------------------------------------

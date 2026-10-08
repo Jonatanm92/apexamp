@@ -19,7 +19,9 @@ target_sources(apexamp_snapshot PRIVATE PluginSnapshot.cpp ${APEXAMP_SOURCES})
 target_include_directories(apexamp_snapshot PRIVATE ${APEXAMP_SOURCE_DIR})
 target_compile_definitions(apexamp_snapshot PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 NAM_ENABLE_A2_FAST=1 JUCE_MODAL_LOOPS_PERMITTED=1
-    APEX_SNAPSHOT_HEADER="PluginProcessor.h" APEX_SNAPSHOT_PROCESSOR=ApexAmpProcessor)
+    APEX_SNAPSHOT_HEADER="PluginProcessor.h" APEX_SNAPSHOT_PROCESSOR=ApexAmpProcessor
+    APEX_SNAPSHOT_UNLOCK_HEADER="ThallbyssalEditor.h" APEX_SNAPSHOT_UNLOCK_EDITOR=ThallbyssalEditor
+    APEX_STORE_URL="https://example.com/buy")
 target_link_libraries(apexamp_snapshot PRIVATE
     ApexAmpAssets apex_dsp apex_ui
     $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_core>

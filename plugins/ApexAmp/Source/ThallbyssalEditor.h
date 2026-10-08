@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "apex/ui/Abyss.h"
 #include "apex/ui/EditorBase.h"
+#include "apex/ui/Licensing.h"
 
 /**
  * ThallbyssalEditor
@@ -25,6 +26,9 @@ public:
     ~ThallbyssalEditor() override;
 
     static constexpr int designWidth = 1200, designHeight = 900;
+
+    /** The trial / licence screen (also from the trial badge and the settings menu). */
+    void showUnlock();
 
 protected:
     void tick() override;
@@ -64,6 +68,7 @@ private:
     void loadRig();
     void loadIr();
     void showTargetMenu();
+    void updateTrialBadge();
 
     ApexAmpProcessor& proc;
     apex::ui::abyss::LookAndFeel abyssLookAndFeel;
@@ -78,6 +83,9 @@ private:
     apex::ui::abyss::GlowButton *saveButton = nullptr, *aButton = nullptr, *bButton = nullptr,
                                 *undoButton = nullptr, *redoButton = nullptr, *tunerButton = nullptr, *settingsButton = nullptr;
     apex::ui::abyss::VMeter *inMeter = nullptr, *outMeter = nullptr;
+    apex::ui::abyss::GlowButton* trialBadge = nullptr;
+    std::unique_ptr<apex::ui::UnlockOverlay> unlock;
+    juce::String trialText;
 
     // input match
     apex::ui::abyss::VMeter* diMeter = nullptr;

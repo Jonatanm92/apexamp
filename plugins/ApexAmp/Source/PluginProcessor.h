@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "NamEngine.h"
+#include "apex/ui/Licensing.h"
 #include "apex/ui/PresetManager.h"
 #include "apex/ui/TunerFeed.h"
 
@@ -68,6 +69,11 @@ public:
         lastRiffSound = sound;
         return lastRiff;
     }
+    /** The licence key and the trial, shared by every Apex plugin in the process. */
+    juce::SharedResourcePointer<apex::ui::Licensing> licensing;
+    static constexpr std::uint8_t licenceProduct = apex::licence::product::amp;
+    bool isUnlocked() const noexcept { return licensing->isAllowed (licenceProduct); }
+
     std::uint32_t getLegionHits() const noexcept { return engine.legionHits.load (std::memory_order_relaxed); }
     float getLegionLastVelocity() const noexcept { return engine.legionLastVelocity.load (std::memory_order_relaxed); }
 
@@ -108,6 +114,7 @@ private:
     NamEngine engine;
     RiffRecorder::Files lastRiff;       // message thread: the last take exported
     std::int64_t lastRiffSound = -2;
+    int licenceTicks = 0;
     juce::AudioParameterBool* bypassParam = nullptr;
     std::atomic<float>* dropOnParam = nullptr;
     std::atomic<int> pendingLatency { -1 };

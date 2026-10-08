@@ -450,6 +450,8 @@ ThallbyssalEditor::ThallbyssalEditor (ApexAmpProcessor& p)
 
     selectModule ((int) apvts.state.getProperty ("abyssModule", (int) amp));
     tick();
+    if (proc.licensing->getStatus (proc.licenceProduct).expired)
+        showUnlock();
 }
 
 ThallbyssalEditor::~ThallbyssalEditor()
@@ -578,6 +580,10 @@ void ThallbyssalEditor::buildHeader()
     tunerButton->onClick = [this] { toggleTuner(); tunerButton->setToggleState (isTunerOpen(), juce::dontSendNotification); };
     settingsButton->onClick = [this] { showSettingsMenu (*settingsButton); };
     onTunerClosed = [this] { tunerButton->setToggleState (false, juce::dontSendNotification); };
+
+    trialBadge = make (std::make_unique<abyss::GlowButton> ("TRIAL", abyss::GlowButton::Style::tab), { 790.0f, 112.0f, 194.0f, 30.0f },
+                       "Trial and licence");
+    trialBadge->onClick = [this] { showUnlock(); };
 
     auto in  = std::make_unique<abyss::VMeter> (-60.0f, 0.0f, std::vector<float> {}, true);
     auto out = std::make_unique<abyss::VMeter> (-60.0f, 0.0f, std::vector<float> { 0.0f, -6.0f, -12.0f, -18.0f, -24.0f, -36.0f, -48.0f, -60.0f }, true);
@@ -1254,6 +1260,9 @@ void ThallbyssalEditor::addSettingsItems (juce::PopupMenu& menu)
     const float trim = param ("inputTrim");
     menu.addItem (102, "Calibrate DI (Auto Input)");
     menu.addItem (103, "Reset input trim (" + minus (juce::String (trim, 1)) + " dB)", std::abs (trim) > 0.05f);
+    menu.addSeparator();
+    menu.addItem (104, (proc.licensing->getStatus (proc.licenceProduct).licensed ? "Licence" : "Unlock Thallbyssal")
+                           + juce::String::charToString (0x2026));
 }
 
 void ThallbyssalEditor::handleSettingsItem (int id)
@@ -1262,6 +1271,47 @@ void ThallbyssalEditor::handleSettingsItem (int id)
     if (id == 101) loadIr();
     if (id == 102) proc.startAutoInput();
     if (id == 103) setParam ("inputTrim", 0.0f, "Reset input trim");
+    if (id == 104) showUnlock();
+}
+
+void ThallbyssalEditor::showUnlock()
+{
+    if (unlock == nullptr)
+    {
+        unlock = std::make_unique<apex::ui::UnlockOverlay> (*proc.licensing, proc.licenceProduct, "Thallbyssal", APEX_STORE_URL);
+        unlock->onClose = [this]
+        {
+            // the close button belongs to the overlay: delete it after its click has returned
+            juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<ThallbyssalEditor> (this)]
+                                             {
+                                                 if (safe != nullptr)
+                                                     safe->unlock.reset();
+                                             });
+        };
+        unlock->setBounds (0, 0, designWidth, designHeight);
+        backdrop->addAndMakeVisible (*unlock);
+    }
+    unlock->toFront (true);
+}
+
+void ThallbyssalEditor::updateTrialBadge()
+{
+    const auto s = proc.licensing->getStatus (proc.licenceProduct);
+    const auto dot = juce::String::charToString (0x00B7);
+    const juce::String text = s.licensed ? juce::String()
+                              : s.expired ? "TRIAL ENDED  " + dot + "  UNLOCK"
+                                          : "TRIAL  " + dot + "  " + juce::String (s.daysLeft) + (s.daysLeft == 1 ? " DAY LEFT" : " DAYS LEFT");
+    if (text != trialText)
+    {
+        trialText = text;
+        trialBadge->setButtonText (text);
+        trialBadge->setVisible (text.isNotEmpty());
+        trialBadge->setPulsing (s.expired);
+        trialBadge->setTooltip (s.expired ? "The trial has ended: your DI passes through untouched. Click to enter a licence key."
+                                          : "Everything works during the trial. Click to enter a licence key.");
+    }
+    if (s.expired)
+        trialBadge->setPulse (0.55f + 0.45f * std::sin ((float) frameCounter * 0.12f));
 }
 
 float ThallbyssalEditor::getInputPeak()  { return proc.inputMagnitude.load(); }
@@ -1278,6 +1328,7 @@ void ThallbyssalEditor::tick()
     const bool playing = inDb > -50.0f;
 
     // ---- header ----------------------------------------------------------------
+    updateTrialBadge();
     presetName->setText (presets.getCurrentName().toUpperCase(), presets.isModified());
     aButton->setToggleState (presets.getSlot() == 0, juce::dontSendNotification);
     bButton->setToggleState (presets.getSlot() == 1, juce::dontSendNotification);

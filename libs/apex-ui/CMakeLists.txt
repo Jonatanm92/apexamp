@@ -30,6 +30,7 @@ target_sources(apex_ui INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PresetManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorBase.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/AbyssPaint.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/AbyssControls.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/AbyssControls.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Licensing.cpp)
 target_include_directories(apex_ui INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(apex_ui INTERFACE ApexUiAssets)
+target_link_libraries(apex_ui INTERFACE ApexUiAssets apex_licence)

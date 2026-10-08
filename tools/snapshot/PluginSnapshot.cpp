@@ -1,11 +1,14 @@
 // Renders a plugin editor headlessly to PNG for UI review.
-//   <tool> out.png [scale] [--set paramId=value ...] [--prop name=value ...] [--preset index] [--tuner]
+//   <tool> out.png [scale] [--set paramId=value ...] [--prop name=value ...] [--preset index] [--tuner] [--unlock]
 // --prop sets a property on the state tree before the editor opens (e.g. the
 // selected module of an editor).
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include APEX_SNAPSHOT_HEADER
 #include "apex/ui/Shell.h"
+#ifdef APEX_SNAPSHOT_UNLOCK_HEADER
+ #include APEX_SNAPSHOT_UNLOCK_HEADER
+#endif
 
 static void findAndOpenTuner (juce::Component& c)
 {
@@ -23,7 +26,7 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI init;
     juce::String out = "editor.png";
     float scale = 1.0f;
-    bool tuner = false;
+    bool tuner = false, unlock = false;
 
     auto proc = std::make_unique<APEX_SNAPSHOT_PROCESSOR>();
     proc->setPlayConfigDetails (2, 2, 48000.0, 512);
@@ -46,6 +49,7 @@ int main (int argc, char** argv)
         }
         else if (a == "--preset" && i + 1 < argc) proc->presets.loadPreset (juce::String (argv[++i]).getIntValue());
         else if (a == "--tuner") tuner = true;
+        else if (a == "--unlock") unlock = true;
         else if (i == 1) out = a;
         else scale = a.getFloatValue();
     }
@@ -53,6 +57,12 @@ int main (int argc, char** argv)
     std::unique_ptr<juce::AudioProcessorEditor> editor (proc->createEditor());
     if (tuner)
         findAndOpenTuner (*editor);
+   #ifdef APEX_SNAPSHOT_UNLOCK_EDITOR
+    if (auto* e = dynamic_cast<APEX_SNAPSHOT_UNLOCK_EDITOR*> (editor.get()); e != nullptr && unlock)
+        e->showUnlock();
+   #else
+    juce::ignoreUnused (unlock);
+   #endif
 
     // Let timers, attachments and async updates run, and feed the meters.
     for (int i = 0; i < 40; ++i)

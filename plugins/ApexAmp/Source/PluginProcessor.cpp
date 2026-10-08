@@ -437,6 +437,13 @@ void ApexAmpProcessor::timerCallback()
     if (autoOutcome.load() == 0)
         autoTrimApplied = false;
 
+    // a key entered in another instance or DAW, and the trial clock (every 5 s)
+    if (++licenceTicks >= 50)
+    {
+        licenceTicks = 0;
+        licensing->refresh();
+    }
+
     // The Drop pedal adds the pitch engine's latency; tell the host from the
     // message thread whenever it is switched.
     const int latency = currentLatency();
@@ -482,7 +489,8 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
             if (auto bpm = position->getBpm(); bpm.hasValue() && *bpm > 20.0 && *bpm < 400.0)
                 hostBpm.store (*bpm, std::memory_order_relaxed);
 
-    if (bypassParam == nullptr || ! bypassParam->get())
+    // after the trial, without a key, the DI passes through untouched
+    if (isUnlocked() && (bypassParam == nullptr || ! bypassParam->get()))
     {
         engine.process (buffer, gatherParams());
         chugPunch.store (engine.getChugPunch(), std::memory_order_relaxed);
