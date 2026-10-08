@@ -80,7 +80,7 @@ private:
     int currentIndex = 0;
     juce::String currentName;
     std::atomic<bool> modified { false };
-    bool applying = false;
+    std::atomic<bool> applying { false };   // automation may arrive on the audio thread
 
     int slot = 0;
     Snapshot slots[2];

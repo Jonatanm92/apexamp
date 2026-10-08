@@ -115,6 +115,16 @@ private:
     RiffRecorder::Files lastRiff;       // message thread: the last take exported
     std::int64_t lastRiffSound = -2;
     int licenceTicks = 0;
+
+    // bypass (and the ended trial) pass the input through delayed by the
+    // reported latency, so a latency-compensating host keeps it in time
+    juce::AudioBuffer<float> dryDelay;
+    int dryDelayWrite = 0;
+    // meanwhile the engine runs on silence until its tails (echo, reverb, cab)
+    // have died away, so nothing frozen plays on when it comes back
+    juce::AudioBuffer<float> silence;
+    bool engineAtRest = false;
+    int quietSamples = 0;
     juce::AudioParameterBool* bypassParam = nullptr;
     std::atomic<float>* dropOnParam = nullptr;
     std::atomic<int> pendingLatency { -1 };

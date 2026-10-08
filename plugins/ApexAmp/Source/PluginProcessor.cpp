@@ -420,6 +420,14 @@ void ApexAmpProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     tunerFeed.prepare (sampleRate);
     reportedLatency = currentLatency();
     setLatencySamples (reportedLatency);
+
+    const int maxLatency = engine.getLatencySamples() + engine.getDropLatencySamples();
+    dryDelay.setSize (juce::jmax (1, getTotalNumInputChannels()), maxLatency + samplesPerBlock + 1);
+    dryDelay.clear();
+    dryDelayWrite = 0;
+    silence.setSize (juce::jmax (1, getTotalNumOutputChannels()), samplesPerBlock);
+    engineAtRest = false;
+    quietSamples = 0;
 }
 
 void ApexAmpProcessor::timerCallback()
@@ -489,12 +497,50 @@ void ApexAmpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
             if (auto bpm = position->getBpm(); bpm.hasValue() && *bpm > 20.0 && *bpm < 400.0)
                 hostBpm.store (*bpm, std::memory_order_relaxed);
 
-    // after the trial, without a key, the DI passes through untouched
-    if (isUnlocked() && (bypassParam == nullptr || ! bypassParam->get()))
+    // keep the last input for the pass-through below
+    const int delaySize = dryDelay.getNumSamples();
+    const int inChannels = delaySize > 0 ? juce::jmin (totalIn, buffer.getNumChannels(), dryDelay.getNumChannels()) : 0;
+    for (int ch = 0; ch < inChannels; ++ch)
+        for (int i = 0, w = dryDelayWrite; i < n; ++i, w = (w + 1 == delaySize ? 0 : w + 1))
+            dryDelay.setSample (ch, w, buffer.getSample (ch, i));
+
+    // bypassed, or after the trial without a key: the input passes through
+    // untouched, delayed by the latency the host compensates for
+    const bool passThrough = ! isUnlocked() || (bypassParam != nullptr && bypassParam->get());
+    if (! passThrough)
     {
+        engineAtRest = false;
+        quietSamples = 0;
         engine.process (buffer, gatherParams());
         chugPunch.store (engine.getChugPunch(), std::memory_order_relaxed);
     }
+    else
+    {
+        if (! engineAtRest)
+        {
+            // let the tails decay as if the input had stopped; rest once quiet for 0.5 s
+            silence.setSize (silence.getNumChannels(), n, false, false, true);
+            silence.clear();
+            engine.process (silence, gatherParams());
+            quietSamples = silence.getMagnitude (0, n) < 1.0e-6f ? quietSamples + n : 0;
+            engineAtRest = quietSamples > (int) (0.5 * getSampleRate());
+        }
+
+        const int latency = juce::jlimit (0, juce::jmax (0, delaySize - n), currentLatency());
+        for (int ch = 0; ch < buffer.getNumChannels() && delaySize > 0; ++ch)
+        {
+            const int src = juce::jmin (ch, inChannels - 1);
+            for (int i = 0; i < n; ++i)
+            {
+                int r = dryDelayWrite + i - latency;
+                if (r < 0) r += delaySize;
+                if (r >= delaySize) r -= delaySize;
+                buffer.setSample (ch, i, src >= 0 ? dryDelay.getSample (src, r) : 0.0f);
+            }
+        }
+    }
+    if (delaySize > 0)
+        dryDelayWrite = (dryDelayWrite + n) % delaySize;
 
     // Level the amp is hit with (after trim + gain), for the editor's pressure gauge.
     const float drive = inMag * juce::Decibels::decibelsToGain (apvts.getRawParameterValue (pid::inputGain)->load()

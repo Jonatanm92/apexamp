@@ -28,9 +28,20 @@ PresetManager::~PresetManager()
             apvts.removeParameterListener (rp->getParameterID(), this);
 }
 
+namespace
+{
+    /** Sets an atomic flag for a scope. */
+    struct FlagScope
+    {
+        explicit FlagScope (std::atomic<bool>& f) : flag (f) { flag.store (true); }
+        ~FlagScope() { flag.store (false); }
+        std::atomic<bool>& flag;
+    };
+}
+
 void PresetManager::parameterChanged (const juce::String& id, float)
 {
-    if (! applying && isPresetParameter (id))
+    if (! applying.load() && isPresetParameter (id))
         modified.store (true);
 }
 
@@ -68,7 +79,7 @@ void PresetManager::refreshUserPresets()
 void PresetManager::applyValues (const std::vector<std::pair<juce::String, float>>& realValues)
 {
     std::map<juce::String, float> wanted (realValues.begin(), realValues.end());
-    const juce::ScopedValueSetter<bool> guard (applying, true);
+    const FlagScope guard (applying);
 
     for (auto* p : apvts.processor.getParameters())
     {
@@ -89,7 +100,7 @@ void PresetManager::applyValues (const std::vector<std::pair<juce::String, float
 
 void PresetManager::applySnapshot (const Snapshot& snapshot)
 {
-    const juce::ScopedValueSetter<bool> guard (applying, true);
+    const FlagScope guard (applying);
     for (auto* p : apvts.processor.getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
         {

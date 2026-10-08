@@ -114,14 +114,17 @@ if(APEXAMP_BUILD_TESTS)
     target_link_libraries(licensing_check PRIVATE apex_ui juce::juce_audio_utils PUBLIC juce::juce_recommended_config_flags)
     add_test(NAME licensing COMMAND licensing_check)
 
-    juce_add_console_app(gate_check PRODUCT_NAME "gate_check")
-    target_sources(gate_check PRIVATE tools/gate_check.cpp ${APEXAMP_SOURCES})
-    target_include_directories(gate_check PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
-    target_compile_definitions(gate_check PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 NAM_ENABLE_A2_FAST=1 APEX_STORE_URL="")
-    target_link_libraries(gate_check PRIVATE ApexAmpAssets apex_dsp apex_ui $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_core>
+    # the whole processor: noise gate, bypass latency and tails
+    juce_add_console_app(processor_check PRODUCT_NAME "processor_check")
+    target_sources(processor_check PRIVATE tools/processor_check.cpp ${APEXAMP_SOURCES})
+    target_include_directories(processor_check PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
+    target_compile_definitions(processor_check PRIVATE
+        JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 NAM_ENABLE_A2_FAST=1 JUCE_MODAL_LOOPS_PERMITTED=1 APEX_STORE_URL="")
+    target_link_libraries(processor_check PRIVATE ApexAmpAssets apex_dsp apex_ui $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_core>
                           juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags)
     if(UNIX AND NOT APPLE)
-        target_link_libraries(gate_check PRIVATE stdc++fs)
+        target_link_libraries(processor_check PRIVATE stdc++fs)
     endif()
-    add_test(NAME noise_gate COMMAND gate_check)
+    add_test(NAME noise_gate COMMAND processor_check gate)
+    add_test(NAME bypass COMMAND processor_check bypass)
 endif()
