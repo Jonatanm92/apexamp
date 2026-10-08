@@ -42,6 +42,8 @@ protected:
     virtual void addSettingsItems (juce::PopupMenu&) {}
     virtual void handleSettingsItem (int) {}
 
+    HeaderBar& getHeader() noexcept { return header; }
+
     juce::Component stage;   // design-space area under the header
     ApexLookAndFeel lookAndFeel;
     juce::AudioProcessorValueTreeState& apvts;

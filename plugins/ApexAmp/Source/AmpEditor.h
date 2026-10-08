@@ -7,10 +7,11 @@
 /**
  * AmpEditor
  * ---------
- * The ApexAmp rig: a NAM-powered head on a 4x12, and a pedalboard in front of
- * it (Drop, Gate, Boost, Cab). Everything static is painted once into a cached
- * image (AmpStage); the controls on top are live components bound to the
- * parameters with undo.
+ * The ApexAmp rig: a NAM-powered head on a 4x12 with the cabinet controls on a
+ * plate in the baffle, and a pedalboard in signal order: Drop, Gate, Boost,
+ * Shape (after the amp) and the Void unit (Echo + Abyss, after the cab).
+ * Everything static is painted once into a cached image (AmpStage); the
+ * controls on top are live components bound to the parameters with undo.
  */
 class AmpEditor : public apex::ui::EditorBase
 {
@@ -18,23 +19,38 @@ public:
     explicit AmpEditor (ApexAmpProcessor&);
     ~AmpEditor() override;
 
-    /** Design-space layout shared by the static painter and resized(). */
+    /** Design-space layout shared by the static painter and the controls. */
     struct Layout
     {
         Layout();
-        juce::Rectangle<float> head, plate, cab, board;
-        juce::Rectangle<float> drop, gate, boost, cabUnit;            // pedal outer bounds
-        juce::Rectangle<float> dropTop, gateTop, boostTop, cabTop;    // top faces
+        juce::Rectangle<float> head, plate, cab, cabPlate, board;
+        juce::Rectangle<float> drop, gate, boost, shape, voidUnit;         // pedal outer bounds
+        juce::Rectangle<float> dropTop, gateTop, boostTop, shapeTop, voidTop;
+
+        // head
         juce::Point<float> gain, tight, bass, mid, treble, presence, master;
         float bigKnob = 84.0f, knob = 58.0f;
         juce::Rectangle<float> selector, trims, power, jewel;
-        juce::Rectangle<float> dropGlass, dropDigits, dropCaption, dropUp, dropDown;
-        juce::Point<float> dropBody, dropSub, gateThresh, gateHold, boostDrive, boostTone, boostLevel, cabMix, cabLowCut;
+
+        // cabinet plate
         juce::Rectangle<float> cabGlass, cabLcd, cabPrev, cabNext, cabLoad;
+        juce::Point<float> cabMix, cabLowCut;
+        float cabKnob = 44.0f;
+
+        // pedals
+        float pedalKnob = 34.0f, voidKnob = 32.0f, dropKnob = 40.0f;
+        juce::Rectangle<float> dropGlass, dropDigits, dropCaption, dropUp, dropDown;
+        juce::Point<float> dropBody, dropSub;
+        juce::Point<float> gateThresh, gateHold;
+        juce::Point<float> boostDrive, boostTone, boostLevel;
+        juce::Point<float> chug, chugFreq, dirt;
+        juce::Rectangle<float> voidGlass, voidLcd, sync, tap;
+        juce::Point<float> echoTime, echoFeedback, echoDuck, echoMix;
+        juce::Point<float> abyssDecay, abyssDepth, abyssTone, abyssMix;
+        juce::Point<float> echoSwitch, abyssSwitch;
     };
 
 protected:
-    void resized() override;
     void tick() override;
     float getInputPeak() override;
     float getOutputPeak() override;
@@ -45,11 +61,17 @@ private:
     struct AmpStage;
     struct BlendTrims;
 
-    apex::ui::Knob& makeKnob (const juce::String& paramId, apex::ui::KnobStyle, juce::Point<float> centre, float diameter);
-    apex::ui::Footswitch& makeFootswitch (const juce::String& paramId, apex::ui::Led& led, juce::Rectangle<float> top);
+    apex::ui::Knob& makeKnob (const juce::String& paramId, apex::ui::KnobStyle, juce::Point<float> centre, float diameter,
+                              const juce::String& tip = {});
+    apex::ui::Footswitch& makeFootswitch (const juce::String& paramId, apex::ui::Led& led, juce::Point<float> centre,
+                                          const juce::String& tip);
     void syncSelector();
     void selectRig (int position);
     void stepParam (juce::ParameterAttachment&, juce::RangedAudioParameter&, int delta, int minValue, int maxValue);
+    void setParam (const juce::String& paramId, float value);
+    void bindEchoTime();
+    void tapTempo();
+    void updateAutoButton();
     void loadRig();
     void loadIr();
 
@@ -66,14 +88,22 @@ private:
     std::unique_ptr<BlendTrims> trims;
     apex::ui::BatToggle power;
     apex::ui::Jewel jewel;
-    apex::ui::Led dropLed, gateLed, boostLed;
+    apex::ui::Led dropLed, gateLed, boostLed, shapeLed, echoLed, abyssLed;
     apex::ui::SevenSegmentDisplay dropDigits { 3 };
-    apex::ui::LcdText dropCaption, cabLcd;
+    apex::ui::LcdText dropCaption, cabLcd, voidLcd;
     apex::ui::HardwareButton dropUp { apex::ui::HardwareButton::Glyph::up }, dropDown { apex::ui::HardwareButton::Glyph::down };
     apex::ui::HardwareButton cabPrev { apex::ui::HardwareButton::Glyph::left }, cabNext { apex::ui::HardwareButton::Glyph::right };
     apex::ui::HardwareButton cabLoad { apex::ui::HardwareButton::Glyph::load };
+    apex::ui::HardwareButton syncButton { juce::String ("SYNC") }, tapButton { juce::String ("TAP") };
+
+    apex::ui::Knob* echoTimeKnob = nullptr;
+    std::unique_ptr<juce::SliderParameterAttachment> echoTimeAttachment;
+    std::vector<double> taps;
+
+    int autoMessageFrames = 0, lastAutoOutcome = 0, blink = 0;
+    juce::String autoMessage;
 
     std::unique_ptr<juce::ParameterAttachment> rigModeAttachment, rigAttachment, bypassAttachment,
-                                               dropShiftAttachment, irAttachment;
+                                               dropShiftAttachment, irAttachment, syncAttachment;
     std::unique_ptr<juce::FileChooser> chooser;
 };

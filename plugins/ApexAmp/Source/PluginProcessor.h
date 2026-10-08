@@ -63,6 +63,7 @@ public:
     bool isAutoInputListening() const noexcept { return autoLearning.load(); }
     /** 0 = nothing yet, 1 = trim set, 2 = heard no guitar. */
     int getAutoInputOutcome() const noexcept { return autoOutcome.load(); }
+    float getAutoInputTrim() const noexcept { return autoTrimResult.load(); }
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
