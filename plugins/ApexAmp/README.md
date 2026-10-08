@@ -97,6 +97,18 @@ listen, repeat.
 
 ---
 
+## v0.11: a gate that keeps up with djent
+
+The noise gate used to fade out over 50 ms, before the amp only. A cranked amp
+squashes a slow fade, so between fast chugs the hiss stayed at almost full level
+(measured: -17 dBFS in the rests). Now the gate closes 60 dB in 25 ms, linear in
+dB, and works twice, like a gate in an amp's effects loop: before the amp, and
+after it, keyed from the DI, so the amp's own hiss and ring are cut too. Rests
+between chugs now measure -74 dBFS, and the pick attack is untouched (the
+`noise_gate` test checks both).
+
+Demo clips are rendered through the processor with `tools/demo` (see its README).
+
 ## v0.10: The Legion
 
 Play a riff; a band plays it with you. **The Legion** (the BAND block in the chain) listens to the

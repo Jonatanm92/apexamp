@@ -40,3 +40,19 @@ target_compile_definitions(apexdrop_snapshot PRIVATE
 target_link_libraries(apexdrop_snapshot PRIVATE
     apex_dsp apex_ui juce::juce_audio_utils
     PUBLIC juce::juce_recommended_config_flags)
+
+# Demo clips rendered through the real ApexAmp processor (see tools/demo):
+#   ./apexamp_demo out-folder [--set id=value ...]
+juce_add_console_app(apexamp_demo PRODUCT_NAME "apexamp_demo")
+target_sources(apexamp_demo PRIVATE ${PROJECT_SOURCE_DIR}/tools/demo/DemoRender.cpp ${APEXAMP_SOURCES})
+target_include_directories(apexamp_demo PRIVATE ${APEXAMP_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/tools/demo)
+target_compile_definitions(apexamp_demo PRIVATE
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 NAM_ENABLE_A2_FAST=1 JUCE_MODAL_LOOPS_PERMITTED=1 APEX_STORE_URL="")
+target_link_libraries(apexamp_demo PRIVATE
+    ApexAmpAssets apex_dsp apex_ui
+    $<LINK_LIBRARY:WHOLE_ARCHIVE,nam_core>
+    juce::juce_audio_utils juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+if(UNIX AND NOT APPLE)
+    target_link_libraries(apexamp_demo PRIVATE stdc++fs)
+endif()

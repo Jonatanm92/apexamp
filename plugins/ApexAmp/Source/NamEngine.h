@@ -219,6 +219,9 @@ public:
         lowDirt.prepare (sampleRate);
         shapeDi.assign ((size_t) maxBlockSize, 0.0f);
         shapeBuf.assign ((size_t) maxBlockSize, 0.0f);
+        gateEnv.assign ((size_t) maxBlockSize, 1.0f);
+        gateDelay.fill (1.0f);
+        gateDelayPos = 0;
         echo.prepare (sampleRate, maxBlockSize);
         abyss.prepare (sampleRate, maxBlockSize);
 
@@ -269,6 +272,8 @@ public:
         gateGain = 1.0f;
         gateOpen = true;
         gateHoldCounter = 0;
+        gateDelay.fill (1.0f);
+        gateDelayPos = 0;
         tightLp1 = tightLp2 = 0.0;
         screamer.reset();
         fizzTamer.reset();
@@ -388,7 +393,9 @@ public:
         const float gateThresh = juce::Decibels::decibelsToGain (p.gateThreshDb);
         const float gateClose = gateThresh * 0.5f; // hysteresis: closes 6 dB below open
         const float gateAtk  = std::exp (-1.0f / (0.0005f * (float) sampleRate)); // 0.5 ms attack (fast open)
-        const float gateRel  = std::exp (-1.0f / (0.050f * (float) sampleRate));  // 50 ms release (smooth close)
+        // closes 60 dB in 25 ms, linear in dB: a high-gain amp squashes a slow
+        // fade, so the hiss between fast chugs would never get quiet
+        const float gateRelStep = std::pow (10.0f, -3.0f / (0.025f * (float) sampleRate));
         const int   holdSamp = (int) (p.gateHoldMs * 0.001f * (float) sampleRate);
 
         // Tightness: cascaded one-pole high-pass on the DI feeding the amp.
@@ -443,10 +450,16 @@ public:
                 if (gateHoldCounter > 0)
                     --gateHoldCounter;
 
-                const float target = gateOpen ? 1.0f : 0.0f;
-                const float coef   = (target > gateGain) ? gateAtk : gateRel;
-                gateGain = target + coef * (gateGain - target);
+                if (gateOpen)
+                    gateGain = 1.0f + gateAtk * (gateGain - 1.0f);
+                else
+                    gateGain = gateGain > 1.0e-5f ? gateGain * gateRelStep : 0.0f;
                 sum *= (double) gateGain;
+                gateEnv[(size_t) i] = gateGain;
+            }
+            else
+            {
+                gateEnv[(size_t) i] = 1.0f;
             }
 
             monoIn[(size_t) i] = sum;
@@ -514,6 +527,17 @@ public:
             shapeBuf[(size_t) i] = (float) mixBuf[(size_t) i];
         chugShaper.process (shapeBuf.data(), n);
         lowDirt.process (shapeBuf.data(), n);
+
+        // ---- 2.7) The gate again, after the amp (keyed from the DI, like a
+        // gate in the effects loop): it also cuts the amp's own hiss and ring
+        // between notes. Lined up with the amp's resampling latency.
+        for (int i = 0; i < n; ++i)
+        {
+            gateDelay[gateDelayPos] = gateEnv[(size_t) i];
+            const float g = gateDelay[(gateDelayPos - (size_t) latencySamples) & (gateDelay.size() - 1)];
+            gateDelayPos = (gateDelayPos + 1) & (gateDelay.size() - 1);
+            shapeBuf[(size_t) i] *= g;
+        }
 
         // ---- 3) Write mono result back to all channels (float) -----------------
         for (int ch = 0; ch < numChannels; ++ch)
@@ -1239,7 +1263,9 @@ private:
     // Shape pedal, Void unit
     apex::dsp::ChugShaper chugShaper;
     apex::dsp::LowDirt lowDirt;
-    std::vector<float> shapeDi, shapeBuf;
+    std::vector<float> shapeDi, shapeBuf, gateEnv;
+    std::array<float, 64> gateDelay {};   // > the resampler's latency (kPrime)
+    size_t gateDelayPos = 0;
     apex::dsp::StereoDelay echo;
     apex::dsp::AbyssReverb abyss;
 };
