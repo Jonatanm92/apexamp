@@ -18,12 +18,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # jobs = the runner's cores: an unbounded make -j runs out of memory
+          # on the many JUCE translation units and the runner is shut down
           - os: ubuntu-latest
             name: Linux
+            jobs: 4
           - os: macos-latest
             name: macOS
+            jobs: 3
           - os: windows-latest
             name: Windows
+            jobs: 4
 
     steps:
       - name: Checkout
@@ -66,7 +71,7 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 
       - name: Build
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel ${{ matrix.jobs }}
 
       # Regression guards:
       #  - rig_audio / resample_streaming: the 3 NAM rigs load and make sound
