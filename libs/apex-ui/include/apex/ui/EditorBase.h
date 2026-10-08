@@ -56,6 +56,12 @@ protected:
     bool isTunerOpen() const noexcept { return tuner != nullptr && tuner->isVisible(); }
     std::function<void()> onTunerClosed;
 
+    /** Restyle for another visual language. The look and feel must outlive the
+        editor's children: call setThemeLookAndFeel (nullptr) in the destructor
+        of the editor that owns it. */
+    void setThemeLookAndFeel (juce::LookAndFeel* lnf);
+    void setTunerTheme (TunerTheme);
+
     juce::Component stage;   // design-space area under the header
     ApexLookAndFeel lookAndFeel;
     juce::AudioProcessorValueTreeState& apvts;
@@ -71,6 +77,7 @@ private:
     std::unique_ptr<TunerOverlay> tuner;
     juce::TooltipWindow tooltips { this, 700 };
     std::unique_ptr<juce::AlertWindow> saveWindow;
+    juce::LookAndFeel* themeLookAndFeel = nullptr;
     int designW, designH;
     bool constructed = false, hasHeader = true;
 };

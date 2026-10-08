@@ -347,10 +347,15 @@ juce::Path iconPath (Icon icon, juce::Rectangle<float> area)
             break;
         case Icon::undo: case Icon::redo:
         {
-            p.addCentredArc (0.5f, 0.52f, 0.34f, 0.34f, 0.0f, -pi * 0.7f, pi * 0.75f, true);
-            const float a = -pi * 0.7f;
-            const float x = 0.5f + std::sin (a) * 0.34f, y = 0.52f - std::cos (a) * 0.34f;
-            p.startNewSubPath (x - 0.02f, y - 0.2f); p.lineTo (x, y); p.lineTo (x + 0.2f, y + 0.02f);
+            const float r = 0.32f, cx = 0.52f, cy = 0.56f, a0 = -pi * 0.62f, a1 = pi * 0.62f;
+            p.addCentredArc (cx, cy, r, r, 0.0f, a0, a1, true);
+            // arrowhead at the start, pointing against the arc's direction
+            const juce::Point<float> at (cx + std::sin (a0) * r, cy - std::cos (a0) * r);
+            const juce::Point<float> dir (-std::cos (a0), -std::sin (a0)), radial (std::sin (a0), -std::cos (a0));
+            const auto tip = at + dir * 0.05f;
+            p.startNewSubPath (tip - dir * 0.2f + radial * 0.14f);
+            p.lineTo (tip);
+            p.lineTo (tip - dir * 0.2f - radial * 0.14f);
             if (icon == Icon::redo)
                 p.applyTransform (juce::AffineTransform::scale (-1.0f, 1.0f, 0.5f, 0.5f));
             break;

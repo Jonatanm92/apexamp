@@ -3,6 +3,9 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "apex/ui/LookAndFeel.h"
+#include "apex/ui/Shell.h"
+
 #include <functional>
 #include <vector>
 
@@ -127,11 +130,16 @@ namespace detail
 //==============================================================================
 // Controls
 
-/** Rotary control: dark ridged knob, ember pointer, value ticks that light up. */
+/** Rotary control: dark ridged knob, ember pointer and value arc. With a
+    caption, the caption sits above the knob and turns into the value while the
+    knob is hovered or dragged. */
 class Knob : public juce::Slider
 {
 public:
     Knob();
+
+    void setCaption (const juce::String& text) { caption = text; cacheKey = {}; repaint(); }
+    static constexpr float captionHeight = 22.0f;
 
     /** Ticks light from this value to the current one (default: the minimum). */
     void setLitOrigin (double value) { litOrigin = value; hasOrigin = true; repaint(); }
@@ -143,8 +151,11 @@ public:
     juce::Rectangle<float> getKnobArea() const;
     bool hitTest (int x, int y) override;
     void paint (juce::Graphics&) override;
+    void mouseEnter (const juce::MouseEvent& e) override { juce::Slider::mouseEnter (e); repaint(); }
+    void mouseExit (const juce::MouseEvent& e) override  { juce::Slider::mouseExit (e); repaint(); }
 
 private:
+    juce::String caption;
     double litOrigin = 0.0;
     bool hasOrigin = false, numbers = true;
     juce::Image cache;
@@ -309,6 +320,38 @@ public:
     void paint (juce::Graphics&) override;
     void setPopupParent (juce::Component* parent);
 };
+
+/** Menus, tooltips, value bubbles, dialogs and text buttons in the abyss style. */
+class LookAndFeel : public ApexLookAndFeel
+{
+public:
+    LookAndFeel();
+
+    void drawPopupMenuBackground (juce::Graphics&, int width, int height) override;
+    void drawPopupMenuItem (juce::Graphics&, const juce::Rectangle<int>& area, bool isSeparator, bool isActive,
+                            bool isHighlighted, bool isTicked, bool hasSubMenu, const juce::String& text,
+                            const juce::String& shortcutKeyText, const juce::Drawable* icon,
+                            const juce::Colour* textColour) override;
+    void drawPopupMenuSectionHeader (juce::Graphics&, const juce::Rectangle<int>&, const juce::String&) override;
+    juce::Font getPopupMenuFont() override;
+
+    void drawTooltip (juce::Graphics&, const juce::String& text, int width, int height) override;
+    juce::Font getSliderPopupFont (juce::Slider&) override;
+    void drawBubble (juce::Graphics&, juce::BubbleComponent&, const juce::Point<float>& tip,
+                     const juce::Rectangle<float>& body) override;
+
+    juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override;
+    void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour& backgroundColour,
+                               bool isMouseOverButton, bool isButtonDown) override;
+    void drawButtonText (juce::Graphics&, juce::TextButton&, bool isMouseOverButton, bool isButtonDown) override;
+
+    juce::Font getAlertWindowTitleFont() override;
+    juce::Font getAlertWindowMessageFont() override;
+    juce::Font getAlertWindowFont() override;
+};
+
+/** The strobe tuner in ember and Cinzel. */
+TunerTheme tunerTheme();
 
 /** Binds a knob or slider to a parameter (value bubble text, double-click to
     default, one undo step per gesture). */

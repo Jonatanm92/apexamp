@@ -116,7 +116,9 @@ void Knob::setPopupParent (juce::Component* parent)
 
 juce::Rectangle<float> Knob::getKnobArea() const
 {
-    const auto b = getLocalBounds().toFloat();
+    auto b = getLocalBounds().toFloat();
+    if (caption.isNotEmpty())
+        b.removeFromTop (captionHeight);
     const float d = juce::jmin (b.getWidth(), b.getHeight()) / boundsRatio;
     return b.withSizeKeepingCentre (d, d);
 }
@@ -186,22 +188,34 @@ void Knob::paint (juce::Graphics& g)
     g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
     g.drawImage (cache, getLocalBounds().toFloat());
 
-    // lit ticks from the origin to the value
+    // value arc from the origin to the value
     const double origin = hasOrigin ? litOrigin : getMinimum();
     const float p0 = (float) valueToProportionOfLength (juce::jlimit (getMinimum(), getMaximum(), origin));
     const float p1 = (float) valueToProportionOfLength (getValue());
-    const float lo = juce::jmin (p0, p1), hi = juce::jmax (p0, p1);
-    for (int i = 0; i < ticks; ++i)
     {
-        const float t = (float) i / (float) (ticks - 1);
-        if (t < lo - 0.001f || t > hi + 0.001f)
-            continue;
-        const float a = startAngle + (endAngle - startAngle) * t;
-        const float sx = std::sin (a), sy = -std::cos (a);
-        juce::Path tick;
-        tick.startNewSubPath (c.x + sx * tickR0, c.y + sy * tickR0);
-        tick.lineTo (c.x + sx * (i % 2 == 0 ? majorR1 : tickR1), c.y + sy * (i % 2 == 0 ? majorR1 : tickR1));
-        glowStroke (g, tick, 1.3f, colours::ember, 0.55f);
+        const float a0 = startAngle + (endAngle - startAngle) * juce::jmin (p0, p1);
+        const float a1 = startAngle + (endAngle - startAngle) * juce::jmax (p0, p1);
+        const float arcR = d * 0.535f;
+        juce::Path track;
+        track.addCentredArc (c.x, c.y, arcR, arcR, 0.0f, startAngle, endAngle, true);
+        g.setColour (colours::emberDim.withAlpha (0.55f));
+        g.strokePath (track, juce::PathStrokeType (juce::jmax (1.2f, d * 0.03f), juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        if (a1 - a0 > 0.01f)
+        {
+            juce::Path arc;
+            arc.addCentredArc (c.x, c.y, arcR, arcR, 0.0f, a0, a1, true);
+            glowStroke (g, arc, juce::jmax (1.3f, d * 0.032f), colours::ember, 0.65f);
+        }
+    }
+
+    if (caption.isNotEmpty())
+    {
+        const auto top = getLocalBounds().toFloat().removeFromTop (captionHeight);
+        const bool live = isMouseOverOrDragging();
+        if (live)
+            glowText (g, getTextFromValue (getValue()), fonts::value (16.0f), top, juce::Justification::centred, colours::emberHot, 0.7f);
+        else
+            glowText (g, caption, fonts::label (15.0f, 0.1f), top, juce::Justification::centred, colours::bone.withAlpha (0.85f), 0.0f);
     }
 
     // pointer
@@ -828,6 +842,178 @@ void LinearSlider::paint (juce::Graphics& g)
     g.fillEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre ({ x, y }));
     g.setColour (juce::Colours::white.withAlpha (0.6f));
     g.fillEllipse (juce::Rectangle<float> (2.5f, 2.5f).withCentre ({ x - 0.8f, y - 0.8f }));
+}
+
+//==============================================================================
+LookAndFeel::LookAndFeel()
+{
+    setColour (juce::PopupMenu::backgroundColourId,            juce::Colour (0xff0c0908));
+    setColour (juce::PopupMenu::textColourId,                  colours::bone);
+    setColour (juce::PopupMenu::headerTextColourId,            colours::ash);
+    setColour (juce::PopupMenu::highlightedBackgroundColourId, colours::emberDeep.withAlpha (0.35f));
+    setColour (juce::PopupMenu::highlightedTextColourId,       colours::emberHot);
+
+    setColour (juce::TooltipWindow::backgroundColourId, juce::Colour (0xf50b0807));
+    setColour (juce::TooltipWindow::textColourId,       colours::bone);
+    setColour (juce::TooltipWindow::outlineColourId,    colours::rim);
+
+    setColour (juce::AlertWindow::backgroundColourId, juce::Colour (0xff0d0a09));
+    setColour (juce::AlertWindow::textColourId,       colours::bone);
+    setColour (juce::AlertWindow::outlineColourId,    colours::rim);
+
+    setColour (juce::TextEditor::backgroundColourId,      juce::Colour (0xff060403));
+    setColour (juce::TextEditor::textColourId,            colours::emberHot);
+    setColour (juce::TextEditor::outlineColourId,         colours::rim);
+    setColour (juce::TextEditor::focusedOutlineColourId,  colours::ember.withAlpha (0.8f));
+    setColour (juce::TextEditor::highlightColourId,       colours::ember.withAlpha (0.3f));
+    setColour (juce::CaretComponent::caretColourId,       colours::ember);
+
+    setColour (juce::TextButton::buttonColourId,   juce::Colour (0xff141010));
+    setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff2a120a));
+    setColour (juce::TextButton::textColourOffId,  colours::ash);
+    setColour (juce::TextButton::textColourOnId,   colours::emberHot);
+    setColour (juce::ResizableWindow::backgroundColourId, colours::coal);
+}
+
+void LookAndFeel::drawPopupMenuBackground (juce::Graphics& g, int width, int height)
+{
+    const auto b = juce::Rectangle<float> ((float) width, (float) height);
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff120d0b), 0.0f, 0.0f, juce::Colour (0xff070504), 0.0f, b.getBottom(), false));
+    g.fillRect (b);
+    g.setColour (colours::rim);
+    g.drawRect (b, 1.0f);
+    g.setColour (colours::ember.withAlpha (0.6f));
+    g.fillRect (b.withHeight (1.0f).reduced (8.0f, 0.0f));
+}
+
+void LookAndFeel::drawPopupMenuItem (juce::Graphics& g, const juce::Rectangle<int>& area, bool isSeparator, bool isActive,
+                                     bool isHighlighted, bool isTicked, bool hasSubMenu, const juce::String& text,
+                                     const juce::String& shortcutKeyText, const juce::Drawable*, const juce::Colour* textColour)
+{
+    if (isSeparator)
+    {
+        g.setColour (colours::rim);
+        g.fillRect (area.reduced (12, 0).withHeight (1).withY (area.getCentreY()));
+        return;
+    }
+    auto r = area.reduced (4, 1).toFloat();
+    if (isHighlighted && isActive)
+    {
+        juce::ColourGradient warm (colours::emberDeep.withAlpha (0.5f), r.getX(), 0.0f, colours::emberDeep.withAlpha (0.0f), r.getRight(), 0.0f, false);
+        g.setGradientFill (warm);
+        g.fillRect (r);
+        g.setColour (colours::ember);
+        g.fillRect (r.withWidth (2.0f));
+    }
+    if (isTicked)
+    {
+        const juce::Point<float> c (r.getX() + 13.0f, r.getCentreY());
+        glowSpot (g, c, 9.0f, colours::ember, 0.7f);
+        g.setColour (colours::emberHot);
+        g.fillEllipse (juce::Rectangle<float> (5.0f, 5.0f).withCentre (c));
+    }
+    const auto ink = textColour != nullptr ? *textColour
+                   : (! isActive ? colours::rim : (isHighlighted ? colours::emberHot : (isTicked ? colours::ember : colours::bone)));
+    g.setColour (ink);
+    g.setFont (getPopupMenuFont());
+    const auto textArea = r.withTrimmedLeft (26.0f).withTrimmedRight (14.0f);
+    g.drawFittedText (text, textArea.toNearestInt(), juce::Justification::centredLeft, 1);
+    if (shortcutKeyText.isNotEmpty())
+    {
+        g.setColour (colours::ash);
+        g.setFont (fonts::value (12.0f));
+        g.drawText (shortcutKeyText, textArea, juce::Justification::centredRight);
+    }
+    if (hasSubMenu)
+        drawIcon (g, Icon::next, juce::Rectangle<float> (10.0f, 10.0f).withCentre ({ r.getRight() - 10.0f, r.getCentreY() }), colours::ash, 0.0f);
+}
+
+void LookAndFeel::drawPopupMenuSectionHeader (juce::Graphics& g, const juce::Rectangle<int>& area, const juce::String& name)
+{
+    g.setFont (fonts::serif (11.0f, 0.35f));
+    g.setColour (colours::ember.withAlpha (0.8f));
+    g.drawFittedText (name.toUpperCase(), area.withTrimmedLeft (14).withTrimmedBottom (2), juce::Justification::bottomLeft, 1);
+}
+
+juce::Font LookAndFeel::getPopupMenuFont() { return fonts::label (16.0f, 0.04f); }
+
+void LookAndFeel::drawTooltip (juce::Graphics& g, const juce::String& text, int width, int height)
+{
+    const auto b = juce::Rectangle<float> ((float) width, (float) height);
+    g.setColour (findColour (juce::TooltipWindow::backgroundColourId));
+    g.fillRect (b);
+    g.setColour (colours::rim);
+    g.drawRect (b, 1.0f);
+    g.setColour (colours::ember.withAlpha (0.7f));
+    g.fillRect (b.withWidth (2.0f));
+    g.setColour (colours::bone);
+    g.setFont (Fonts::body (14.0f));
+    g.drawFittedText (text, b.reduced (10.0f, 4.0f).toNearestInt(), juce::Justification::centredLeft, 4);
+}
+
+juce::Font LookAndFeel::getSliderPopupFont (juce::Slider&) { return fonts::value (15.0f); }
+
+void LookAndFeel::drawBubble (juce::Graphics& g, juce::BubbleComponent&, const juce::Point<float>&, const juce::Rectangle<float>& body)
+{
+    const auto b = body.reduced (0.5f);
+    g.setColour (juce::Colour (0xf2080605));
+    g.fillRoundedRectangle (b, 3.0f);
+    juce::Path border;
+    border.addRoundedRectangle (b, 3.0f);
+    glowStroke (g, border, 0.8f, colours::ember, 0.4f);
+}
+
+juce::Font LookAndFeel::getTextButtonFont (juce::TextButton&, int buttonHeight)
+{
+    return fonts::labelBold (juce::jmin (15.0f, (float) buttonHeight * 0.5f), 0.14f);
+}
+
+void LookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& button, const juce::Colour&, bool over, bool down)
+{
+    auto b = button.getLocalBounds().toFloat().reduced (1.5f);
+    const bool on = button.getToggleState();
+    g.setGradientFill (juce::ColourGradient (juce::Colour (down ? 0xff0b0908 : 0xff181412), b.getX(), b.getY(),
+                                             juce::Colour (0xff080605), b.getX(), b.getBottom(), false));
+    g.fillRoundedRectangle (b, 3.0f);
+    juce::Path border;
+    border.addRoundedRectangle (b, 3.0f);
+    if (on)
+        glowStroke (g, border, 1.0f, colours::ember, 0.6f);
+    else
+    {
+        g.setColour (over ? colours::rimLight : colours::rim);
+        g.strokePath (border, juce::PathStrokeType (1.0f));
+    }
+}
+
+void LookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& button, bool over, bool)
+{
+    const bool on = button.getToggleState();
+    glowText (g, button.getButtonText(), getTextButtonFont (button, button.getHeight()), button.getLocalBounds().toFloat(),
+              juce::Justification::centred,
+              (on ? colours::emberHot : (over ? colours::bone : colours::ash)).withMultipliedAlpha (button.isEnabled() ? 1.0f : 0.4f),
+              on ? 0.6f : 0.0f);
+}
+
+juce::Font LookAndFeel::getAlertWindowTitleFont()   { return fonts::serif (19.0f, 0.3f); }
+juce::Font LookAndFeel::getAlertWindowMessageFont() { return Fonts::body (16.0f); }
+juce::Font LookAndFeel::getAlertWindowFont()        { return Fonts::body (15.0f); }
+
+TunerTheme tunerTheme()
+{
+    TunerTheme t;
+    t.accent = colours::ember;
+    t.inTune = colours::emberHot;
+    t.text = colours::bone;
+    t.dim = colours::ash;
+    t.faint = colours::emberDim;
+    t.panelTop = juce::Colour (0xff140f0d);
+    t.panelBottom = juce::Colour (0xff060404);
+    t.outline = colours::rim;
+    t.noteFont = [] (float h) { return fonts::serif (h * 0.85f, 0.0f); };
+    t.labelFont = [] (float h) { return fonts::serif (h, 0.4f); };
+    t.readoutFont = [] (float h) { return fonts::value (h + 1.0f); };
+    return t;
 }
 
 } // namespace apex::ui::abyss

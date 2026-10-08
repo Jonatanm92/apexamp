@@ -240,6 +240,23 @@ void HeaderBar::resized()
 }
 
 //==============================================================================
+TunerTheme TunerTheme::apex()
+{
+    TunerTheme t;
+    t.accent = colours::bone;
+    t.inTune = colours::amber;
+    t.text = colours::bone;
+    t.dim = colours::dim;
+    t.faint = colours::faint;
+    t.panelTop = juce::Colour (0xff141416);
+    t.panelBottom = juce::Colour (0xff09090a);
+    t.outline = colours::hairline;
+    t.noteFont = [] (float h) { return Fonts::display (h, 0.02f); };
+    t.labelFont = [] (float h) { return Fonts::label (h, 0.34f); };
+    t.readoutFont = [] (float h) { return Fonts::mono (h); };
+    return t;
+}
+
 TunerOverlay::TunerOverlay (TunerFeed& f) : feed (f)
 {
     history.assign (2048, 0.0f);
@@ -405,23 +422,23 @@ void TunerOverlay::paint (juce::Graphics& g)
 
     const auto panel = getLocalBounds().toFloat().withSizeKeepingCentre (660.0f, 400.0f);
     juce::DropShadow (juce::Colours::black, 40, { 0, 16 }).drawForRectangle (g, panel.toNearestInt());
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff141416), panel.getX(), panel.getY(),
-                                             juce::Colour (0xff09090a), panel.getX(), panel.getBottom(), false));
+    g.setGradientFill (juce::ColourGradient (theme.panelTop, panel.getX(), panel.getY(),
+                                             theme.panelBottom, panel.getX(), panel.getBottom(), false));
     g.fillRoundedRectangle (panel, 14.0f);
-    g.setColour (colours::hairline);
+    g.setColour (theme.outline);
     g.drawRoundedRectangle (panel.reduced (0.5f), 14.0f, 1.0f);
 
     auto inner = panel.reduced (28.0f, 20.0f);
     auto top = inner.removeFromTop (28.0f);
-    g.setFont (Fonts::label (13.0f, 0.34f));
-    g.setColour (colours::dim);
+    g.setFont (theme.labelFont (13.0f));
+    g.setColour (theme.dim);
     g.drawText ("TUNER", top, juce::Justification::centredLeft, false);
-    g.setFont (Fonts::mono (12.0f));
+    g.setFont (theme.readoutFont (12.0f));
     g.drawText ("A4 = 440 Hz", top.withTrimmedRight (48.0f), juce::Justification::centredRight, false);
 
     const bool hasNote = note >= 0;
     const bool inTune = hasNote && std::abs (smoothedCents) < 3.0f;
-    const auto accent = inTune ? colours::amber : colours::bone;
+    const auto accent = inTune ? theme.inTune : theme.text;
     static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
     auto noteArea = inner.removeFromTop (150.0f);
@@ -429,26 +446,26 @@ void TunerOverlay::paint (juce::Graphics& g)
     {
         const juce::String name (names[note % 12]);
         const int octave = note / 12 - 1;
-        const auto nf = Fonts::display (150.0f, 0.02f);
+        const auto nf = theme.noteFont (150.0f);
         const float nw = juce::GlyphArrangement::getStringWidth (nf, name);
         g.setFont (nf);
         g.setColour (accent);
         g.drawText (name, noteArea.withSizeKeepingCentre (nw + 4.0f, noteArea.getHeight()), juce::Justification::centred, false);
-        g.setFont (Fonts::display (40.0f, 0.0f));
+        g.setFont (theme.noteFont (40.0f));
         g.setColour (accent.withAlpha (0.6f));
         g.drawText (juce::String (octave), noteArea.withSizeKeepingCentre (nw + 4.0f, noteArea.getHeight()).translated (nw * 0.5f + 22.0f, 34.0f),
                     juce::Justification::centred, false);
     }
     else
     {
-        g.setFont (Fonts::display (110.0f, 0.0f));
-        g.setColour (colours::faint);
+        g.setFont (theme.noteFont (110.0f));
+        g.setColour (theme.faint);
         g.drawText (juce::String::charToString (0x2014), noteArea, juce::Justification::centred, false);
     }
 
     auto readout = inner.removeFromTop (26.0f);
-    g.setFont (Fonts::mono (14.0f));
-    g.setColour (colours::label);
+    g.setFont (theme.readoutFont (14.0f));
+    g.setColour (theme.dim);
     if (hasNote)
     {
         juce::String cents = (smoothedCents >= 0.0f ? "+" : juce::String::charToString (0x2212))
@@ -468,7 +485,7 @@ void TunerOverlay::paint (juce::Graphics& g)
         const juce::Graphics::ScopedSaveState s (g);
         g.reduceClipRegion (strobe.reduced (3.0f).toNearestInt());
         const float period = 28.0f;
-        g.setColour (hasNote ? accent.withAlpha (inTune ? 0.95f : 0.7f) : colours::faint.withAlpha (0.4f));
+        g.setColour (hasNote ? accent.withAlpha (inTune ? 0.95f : 0.7f) : theme.faint.withAlpha (0.4f));
         for (float x0 = strobe.getX() - period + strobePhase; x0 < strobe.getRight(); x0 += period)
             g.fillRect (juce::Rectangle<float> (x0, strobe.getY() + 6.0f, period * 0.5f, strobe.getHeight() - 12.0f));
         juce::ColourGradient fade (juce::Colour (0xff060606), strobe.getX(), 0.0f, juce::Colour (0x00060606), strobe.getX() + 70.0f, 0.0f, false);
@@ -486,7 +503,7 @@ void TunerOverlay::paint (juce::Graphics& g)
     {
         const float x = scale.getX() + scale.getWidth() * ((float) c + 50.0f) / 100.0f;
         const bool major = c % 25 == 0;
-        g.setColour (c == 0 ? colours::amber : colours::dim.withAlpha (major ? 0.9f : 0.5f));
+        g.setColour (c == 0 ? theme.inTune : theme.dim.withAlpha (major ? 0.9f : 0.5f));
         g.fillRect (x - 0.5f, scale.getY(), c == 0 ? 2.0f : 1.0f, major ? 12.0f : 7.0f);
     }
     if (hasNote)

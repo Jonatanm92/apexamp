@@ -75,12 +75,23 @@ private:
 };
 
 //==============================================================================
+/** Colours and type of the tuner, so each visual language can restyle it. */
+struct TunerTheme
+{
+    juce::Colour accent, inTune, text, dim, faint, panelTop, panelBottom, outline;
+    std::function<juce::Font (float)> noteFont, labelFont, readoutFont;
+
+    static TunerTheme apex();
+};
+
 /** Full-window strobe tuner. Opening it starts the feed; closing stops it. */
 class TunerOverlay : public juce::Component, private juce::Timer
 {
 public:
     explicit TunerOverlay (TunerFeed&);
     ~TunerOverlay() override;
+
+    void setTheme (TunerTheme t) { theme = std::move (t); repaint(); }
 
     void open();
     void close();
@@ -104,6 +115,7 @@ private:
 
     juce::TextButton muteButton { "MUTE OUTPUT" };
     IconButton closeButton { IconButton::Icon::close, "Close tuner" };
+    TunerTheme theme = TunerTheme::apex();
 };
 
 } // namespace apex::ui

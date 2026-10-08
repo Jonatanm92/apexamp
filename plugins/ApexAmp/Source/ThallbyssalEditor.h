@@ -65,6 +65,7 @@ private:
     void showTargetMenu();
 
     ApexAmpProcessor& proc;
+    apex::ui::abyss::LookAndFeel abyssLookAndFeel;
     std::unique_ptr<apex::ui::abyss::Backdrop> backdrop;
 
     std::vector<std::unique_ptr<juce::Component>> owned;

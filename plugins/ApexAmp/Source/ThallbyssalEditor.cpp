@@ -184,6 +184,9 @@ ThallbyssalEditor::ThallbyssalEditor (ApexAmpProcessor& p)
     : EditorBase (p, p.apvts, p.presets, "Amp", designWidth, designHeight, &p.tunerFeed, false),
       proc (p)
 {
+    setThemeLookAndFeel (&abyssLookAndFeel);
+    setTunerTheme (abyss::tunerTheme());
+
     // ---- the static art --------------------------------------------------------
     abyss::BackdropSpec spec;
     spec.designWidth = designWidth;
@@ -376,7 +379,10 @@ ThallbyssalEditor::ThallbyssalEditor (ApexAmpProcessor& p)
     tick();
 }
 
-ThallbyssalEditor::~ThallbyssalEditor() = default;
+ThallbyssalEditor::~ThallbyssalEditor()
+{
+    setThemeLookAndFeel (nullptr);
+}
 
 //==============================================================================
 float ThallbyssalEditor::param (const char* id) const
@@ -409,16 +415,26 @@ abyss::Knob& ThallbyssalEditor::addKnob (juce::Component& parent, const juce::St
     auto knob = std::make_unique<abyss::Knob>();
     auto& k = *knob;
     parent.addAndMakeVisible (k);
-    k.setBounds (square (centre, d * abyss::Knob::boundsRatio).toNearestInt());
-    k.setPopupParent (&stage);
+    const float side = d * abyss::Knob::boundsRatio;
+    if (label.isNotEmpty())
+    {
+        // the caption above the knob shows the value while it is touched
+        k.setCaption (label);
+        const float w = juce::jmax (side, 118.0f);
+        k.setBounds (juce::Rectangle<float> (centre.x - w * 0.5f, centre.y - side * 0.5f - abyss::Knob::captionHeight,
+                                             w, side + abyss::Knob::captionHeight).toNearestInt());
+    }
+    else
+    {
+        k.setBounds (square (centre, side).toNearestInt());
+        k.setPopupParent (&stage);
+    }
     k.setTooltip (tip);
     auto* p = apvts.getParameter (paramId);
     sliderAttachments.push_back (abyss::attach (k, *p, &proc.undoManager));
     if (auto* ranged = dynamic_cast<juce::AudioParameterFloat*> (p))
         if (ranged->range.start < 0.0f && ranged->range.end > 0.0f)
             k.setLitOrigin (0.0);
-    if (auto* panel = dynamic_cast<Panel*> (&parent); panel != nullptr && label.isNotEmpty())
-        panel->labels.push_back ({ { centre.x - 70.0f, centre.y - d * 0.8f - 22.0f, 140.0f, 18.0f }, label });
     owned.push_back (std::move (knob));
     return k;
 }

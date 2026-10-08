@@ -138,6 +138,18 @@ void EditorBase::timerCallback()
     tick();
 }
 
+void EditorBase::setThemeLookAndFeel (juce::LookAndFeel* lnf)
+{
+    themeLookAndFeel = lnf;
+    setLookAndFeel (lnf != nullptr ? lnf : &lookAndFeel);
+}
+
+void EditorBase::setTunerTheme (TunerTheme t)
+{
+    if (tuner != nullptr)
+        tuner->setTheme (std::move (t));
+}
+
 void EditorBase::toggleTuner()
 {
     if (tuner == nullptr)
@@ -183,7 +195,7 @@ void EditorBase::showPresetMenu (juce::Component& target)
 void EditorBase::showSaveDialog()
 {
     saveWindow = std::make_unique<juce::AlertWindow> ("Save preset", "Name this sound.", juce::MessageBoxIconType::NoIcon, this);
-    saveWindow->setLookAndFeel (&lookAndFeel);
+    saveWindow->setLookAndFeel (themeLookAndFeel != nullptr ? themeLookAndFeel : &lookAndFeel);
     saveWindow->addTextEditor ("name", presets.getCurrentName(), {});
     saveWindow->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
     saveWindow->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
