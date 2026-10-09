@@ -2,7 +2,7 @@
 # Built from the suite root; see ../../CMakeLists.txt.
 
 juce_add_plugin(ApexAmp
-    VERSION                 0.5.0
+    VERSION                 ${PROJECT_VERSION}
     COMPANY_NAME            "PolychromeNext"
     PLUGIN_MANUFACTURER_CODE Pcnx
     PLUGIN_CODE             Apx2

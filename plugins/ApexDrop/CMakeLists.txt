@@ -3,7 +3,7 @@
 # libs/apex-dsp so the same engine can sit in front of ApexAmp's rigs later.
 
 juce_add_plugin(ApexDrop
-    VERSION                 0.1.0
+    VERSION                 ${PROJECT_VERSION}
     COMPANY_NAME            "PolychromeNext"
     PLUGIN_MANUFACTURER_CODE Pcnx
     PLUGIN_CODE             ApDr

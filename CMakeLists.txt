@@ -7,7 +7,9 @@ cmake_minimum_required(VERSION 3.21)
 #   plugins/ApexDrop   drop-tuning / pitch shifter
 #
 # DSP-only build (no JUCE download):  cmake -B build -DAPEX_BUILD_PLUGINS=OFF
-project(ApexSuite VERSION 0.5.0 LANGUAGES C CXX)
+# One version for the suite and both plugins, from the VERSION file.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" APEX_VERSION LIMIT_COUNT 1)
+project(ApexSuite VERSION ${APEX_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)          # NAM core requires C++20
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -1,0 +1,46 @@
+END USER LICENCE AGREEMENT
+
+This agreement is between you and the publisher of this software (the
+"Publisher"). By installing or using the software you agree to it. If you do
+not agree, do not install or use the software.
+
+1. Licence
+   The Publisher grants you a personal, non-exclusive, non-transferable licence
+   to install and use the software on computers you own or control. A licence
+   key is for you alone; do not share or publish it.
+
+2. Trial
+   Without a licence key the software runs as a trial for 14 days with every
+   feature enabled. After the trial it passes audio through unprocessed until a
+   valid licence key is entered.
+
+3. What you may not do
+   You may not resell, rent, sublicense or distribute the software or licence
+   keys, or circumvent the licence check. Reverse engineering is not permitted
+   except where the law allows it regardless of this agreement.
+
+4. Your audio
+   Everything you record or produce with the software is yours. You may use it
+   commercially without crediting the Publisher.
+
+5. Bundled content
+   The amp models, cabinet impulse responses and presets are licensed for use
+   inside the software only and may not be extracted or redistributed.
+
+6. Third-party components
+   The software contains open-source components under their own licences, listed
+   in THIRD_PARTY.txt. Nothing in this agreement limits your rights under those
+   licences.
+
+7. No warranty
+   The software is provided "as is", without warranty of any kind. To the extent
+   permitted by law, the Publisher is not liable for any damages arising from
+   its use, including lost data or lost profits.
+
+8. Termination
+   This licence ends automatically if you break its terms. You then must stop
+   using the software and delete it.
+
+9. Consumer rights
+   Nothing in this agreement limits rights you have under the consumer law of
+   your country that cannot be limited by contract.
