@@ -38,3 +38,15 @@ add_executable(apex_licence_tests tests/licence_tests.cpp)
 target_include_directories(apex_licence_tests PRIVATE third_party/tweetnacl)
 target_link_libraries(apex_licence_tests PRIVATE apex_licence)
 add_test(NAME licence_keys COMMAND apex_licence_tests)
+
+# Apex Key Studio (tools/keystudio, a browser page) must make the same keys as
+# apex_keygen. Needs Node with Ed25519 in WebCrypto; skipped otherwise.
+find_program(APEX_NODE node)
+if(APEX_NODE)
+    add_test(NAME keystudio_crosscheck
+             COMMAND ${APEX_NODE} ${PROJECT_SOURCE_DIR}/tools/keystudio/crosscheck.mjs
+                     $<TARGET_FILE:apex_keygen>
+                     ${PROJECT_SOURCE_DIR}/tools/keystudio/apex-key-studio.html
+                     ${CMAKE_CURRENT_SOURCE_DIR}/dev/development-secret-key.txt)
+    set_tests_properties(keystudio_crosscheck PROPERTIES SKIP_RETURN_CODE 77)
+endif()

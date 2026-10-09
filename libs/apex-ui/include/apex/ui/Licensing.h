@@ -40,8 +40,12 @@ public:
         bool development = false;   // built with the development key: not for sale
     };
 
-    /** Keeps its files in `folder` (the default is the shared Apex folder). */
-    explicit Licensing (juce::File folder = defaultFolder());
+    /** Keeps its files in `folder` (the default is the shared Apex folder) and
+        checks keys against `publicKey` (the default is the one built in). */
+    explicit Licensing (juce::File folder = defaultFolder(),
+                        const apex::licence::PublicKey& publicKey = apex::licence::builtInPublicKey());
+
+    const apex::licence::PublicKey& getPublicKey() const noexcept { return key; }
 
     Status getStatus (std::uint8_t product) const;
     bool isAllowed (std::uint8_t product) const noexcept;
@@ -69,6 +73,7 @@ private:
     int trialDaysLeft() const;
 
     juce::File dir;
+    apex::licence::PublicKey key;
     std::optional<apex::licence::Licence> licence;
     juce::int64 trialStartMs = 0;
     bool trialValid = true;

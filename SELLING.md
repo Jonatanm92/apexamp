@@ -33,20 +33,27 @@ the plugin passes the guitar through untouched; sessions keep their settings.
 Keys are Ed25519-signed and checked offline (no server, no activation limit to
 run). One key unlocks every DAW on the computer.
 
-1. **Make your own key pair once** (on your own computer, not in CI):
-   `apex_keygen keypair ~/apex-secret.key`. Keep the secret key offline with a
-   backup (password manager + USB stick). Lose it and you cannot make keys for
-   builds that carry its public key; leak it and anyone can.
-2. **Build releases with the public key** it prints:
-   `-DAPEX_LICENCE_PUBLIC_KEY=<hex>` (add it as a repository variable for CI).
-   Builds without it use the development key, whose secret is in the repo, and
-   say "DEVELOPMENT BUILD · NOT FOR SALE" on the unlock screen. Never sell one.
+The easiest way is **Apex Key Studio** (`tools/keystudio/apex-key-studio.html`,
+a page that runs in your browser and sends nothing anywhere). The command-line
+tool `apex_keygen` makes the same keys (a CI test checks they are identical).
+
+1. **Make your own key pair once**, on your own computer: Key Studio's
+   "Create key pair", or `apex_keygen keypair ~/apex-secret.key`. Keep the
+   secret key in your password manager plus an offline copy. Lose it and you
+   cannot make keys for builds that carry its public key; leak it and anyone
+   can. Never put it in a chat, an email or GitHub.
+2. **Build releases with the public key**: commit it as the default of
+   `APEX_LICENCE_PUBLIC_KEY` in `libs/apex-licence/CMakeLists.txt`, or set it as
+   the repository variable `APEX_LICENCE_PUBLIC_KEY` for CI. Builds without it
+   use the development key, whose secret is in the repo, and say
+   "DEVELOPMENT BUILD · NOT FOR SALE" on the unlock screen. Never sell one.
 3. **Buy button**: `-DAPEX_STORE_URL=https://...` (your store page).
-4. **Keys per sale**: `apex_keygen issue ~/apex-secret.key --owner "Buyer Name"`
-   for one buyer (the name shows in the plugin), or
-   `apex_keygen batch ~/apex-secret.key 500 > keys.txt` for a list of keys to
-   upload to a store that hands out one key per sale.
-5. `apex_keygen check <key>` verifies a key (support requests).
+4. **Keys per sale**: Key Studio's "Create a licence" (it also writes the email
+   to the buyer), or `apex_keygen issue ~/apex-secret.key --owner "Buyer Name"`.
+   For a store that hands out one key per sale from a list: Key Studio's store
+   list, or `apex_keygen batch ~/apex-secret.key 500 > keys.txt`.
+5. Key Studio's "Check a licence", or `apex_keygen check <key>`, verifies a
+   key (support requests).
 
 The trial is a file in the Apex folder; deleting it restarts the trial. That is
 accepted: a trial only has to keep honest people honest.

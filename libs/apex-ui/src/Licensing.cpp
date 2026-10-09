@@ -41,7 +41,8 @@ juce::File Licensing::defaultFolder()
    #endif
 }
 
-Licensing::Licensing (juce::File folder) : dir (std::move (folder))
+Licensing::Licensing (juce::File folder, const apex::licence::PublicKey& publicKey)
+    : dir (std::move (folder)), key (publicKey)
 {
     loadLicence();
     loadOrStartTrial();
@@ -54,7 +55,7 @@ void Licensing::loadLicence()
     licenceFileTime = file.getLastModificationTime();
     licence.reset();
     if (file.existsAsFile())
-        licence = apex::licence::verify (file.loadFileAsString().toStdString(), apex::licence::builtInPublicKey());
+        licence = apex::licence::verify (file.loadFileAsString().toStdString(), key);
 }
 
 void Licensing::loadOrStartTrial()
@@ -121,7 +122,7 @@ void Licensing::updateAllowed()
 
 juce::String Licensing::activate (const juce::String& keyText, std::uint8_t product)
 {
-    const auto parsed = apex::licence::verify (keyText.toStdString(), apex::licence::builtInPublicKey());
+    const auto parsed = apex::licence::verify (keyText.toStdString(), key);
     if (! parsed)
         return "That is not a valid key. Paste all of it, from APEX to the end.";
     if (! parsed->unlocks (product))
@@ -178,7 +179,7 @@ UnlockOverlay::UnlockOverlay (Licensing& l, std::uint8_t p, juce::String name, j
     {
         // a complete key activates as soon as it is pasted
         const auto text = keyField.getText();
-        if (apex::licence::verify (text.toStdString(), apex::licence::builtInPublicKey()))
+        if (apex::licence::verify (text.toStdString(), licensing.getPublicKey()))
             juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<UnlockOverlay> (this), text]
                                              {
                                                  if (safe != nullptr)

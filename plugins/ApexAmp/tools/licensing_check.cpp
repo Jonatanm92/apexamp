@@ -21,13 +21,33 @@ namespace
         }
     }
 
-    // the development secret key (public on purpose, see libs/apex-licence/dev)
-    std::string devKey (const std::string& owner, std::uint8_t products)
+    // the development key pair (public on purpose, see libs/apex-licence/dev); the
+    // checks pass it in, so they run the same whatever key a build has built in
+    apex::licence::SecretKey devSecret()
     {
         apex::licence::SecretKey sk {};
         apex::licence::fromHex ("97b3847396aead6bd3d00fb4a5c3800afbb474ce1785c9fa983054d6c14785ec"
                                 "5755a626740752f71f4ede36c6a46324bca52935f5c5a0de1b9cab94d51ac8e8",
                                 sk.data(), sk.size());
+        return sk;
+    }
+
+    apex::licence::PublicKey devPublic()
+    {
+        apex::licence::PublicKey pk {};
+        const auto sk = devSecret();
+        std::copy (sk.begin() + 32, sk.end(), pk.begin());
+        return pk;
+    }
+
+    struct DevLicensing : Licensing
+    {
+        explicit DevLicensing (juce::File folder) : Licensing (std::move (folder), devPublic()) {}
+    };
+
+    std::string devKey (const std::string& owner, std::uint8_t products)
+    {
+        const auto sk = devSecret();
         apex::licence::Licence l;
         l.owner = owner;
         l.products = products;
@@ -45,7 +65,7 @@ int main()
     const auto now = juce::Time::currentTimeMillis();
 
     {
-        Licensing l (dir);
+        DevLicensing l (dir);
         const auto s = l.getStatus (product::amp);
         std::printf ("first run: %d days left\n", s.daysLeft);
         check (! s.licensed && ! s.expired && s.daysLeft == Licensing::trialDays, "a first run starts a full trial");
@@ -53,16 +73,16 @@ int main()
         check (dir.getChildFile ("trial.dat").existsAsFile(), "the trial is remembered");
     }
     {
-        Licensing again (dir);
+        DevLicensing again (dir);
         check (again.getStatus (product::amp).daysLeft == Licensing::trialDays, "a second start keeps the same trial");
     }
 
     Licensing::writeTrial (dir, now - 10 * day - 1000);
-    check (Licensing (dir).getStatus (product::amp).daysLeft == 4, "ten days in, four are left");
+    check (DevLicensing (dir).getStatus (product::amp).daysLeft == 4, "ten days in, four are left");
 
     Licensing::writeTrial (dir, now - 15 * day);
     {
-        Licensing l (dir);
+        DevLicensing l (dir);
         const auto s = l.getStatus (product::amp);
         check (s.expired && s.daysLeft == 0 && ! l.isAllowed (product::amp), "after 14 days the trial has ended");
 
@@ -80,7 +100,7 @@ int main()
 
     // a fresh instance (another DAW) reads the stored key
     {
-        Licensing other (dir);
+        DevLicensing other (dir);
         check (other.getStatus (product::amp).licensed && other.isAllowed (product::amp), "the key unlocks every instance");
         other.removeLicence();
         check (! other.isAllowed (product::amp) && other.getStatus (product::amp).expired, "removing the key returns to the ended trial");
@@ -88,10 +108,10 @@ int main()
 
     // an instance that was already running picks up a key entered elsewhere
     {
-        Licensing running (dir);
+        DevLicensing running (dir);
         check (! running.isAllowed (product::amp), "locked before");
         juce::Thread::sleep (1100);   // file times have one-second resolution on some systems
-        Licensing (dir).activate (devKey ("Elsewhere", product::all), product::amp);
+        DevLicensing (dir).activate (devKey ("Elsewhere", product::all), product::amp);
         running.refresh();
         check (running.isAllowed (product::amp) && running.getStatus (product::amp).owner == "Elsewhere", "refresh picks up a new key");
         running.removeLicence();
@@ -103,14 +123,14 @@ int main()
         auto text = dir.getChildFile ("trial.dat").loadFileAsString();
         text = text.replace (juce::String (now), juce::String (now + 30 * day));
         dir.getChildFile ("trial.dat").replaceWithText (text);
-        check (Licensing (dir).getStatus (product::amp).expired, "an edited trial file reads as ended");
+        check (DevLicensing (dir).getStatus (product::amp).expired, "an edited trial file reads as ended");
     }
 
     // a clock set far back ends it too, a small clock difference does not
     Licensing::writeTrial (dir, now + 5 * day);
-    check (Licensing (dir).getStatus (product::amp).expired, "a clock set back ends the trial");
+    check (DevLicensing (dir).getStatus (product::amp).expired, "a clock set back ends the trial");
     Licensing::writeTrial (dir, now + day / 2);
-    check (! Licensing (dir).getStatus (product::amp).expired, "a few hours of clock difference are fine");
+    check (! DevLicensing (dir).getStatus (product::amp).expired, "a few hours of clock difference are fine");
 
     dir.deleteRecursively();
     std::printf ("%s\n", failures == 0 ? "PASS" : "FAIL");

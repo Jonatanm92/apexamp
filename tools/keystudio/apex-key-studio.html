@@ -1,0 +1,504 @@
+<title>Apex Key Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow working column, like a key cabinet: the two steps you do (create once, issue
+   per sale) first, the occasional tools (store list, check) after. Single dark look, the plugins' own. */
+:root {
+  --bg: #0c0908;          /* basalt */
+  --panel: #151110;
+  --sunk: #090706;
+  --line: #2f2723;
+  --fg: #e8ddd0;          /* bone */
+  --muted: #9b8f84;       /* ash */
+  --ember: #ff6a2a;
+  --ember-soft: #ff9a5c;
+  --ember-deep: #5a1f0c;
+  --good: #8fd07c;
+  --bad: #ff5d4a;
+  --display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --ui: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: radial-gradient(1200px 500px at 50% -200px, #2a120a 0%, var(--bg) 60%) no-repeat, var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 var(--body);
+  padding-inline: 16px;
+  padding-block: 32px 64px;
+}
+.wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font: 600 13px/1 var(--ui); letter-spacing: .18em; text-transform: uppercase; color: var(--ember); }
+h1 { font: 700 clamp(30px, 6vw, 44px)/1.05 var(--display); letter-spacing: .06em; margin: 0; text-wrap: balance; }
+.lede { color: var(--muted); max-width: 62ch; margin: 0; }
+.support { font: 500 15px/1.3 var(--ui); letter-spacing: .04em; display: flex; gap: 8px; align-items: center; }
+.support.ok { color: var(--good); }
+.support.no { color: var(--bad); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.fact { border-top: 1px solid var(--line); padding-top: 10px; color: var(--muted); font-size: 14px; }
+.fact b { display: block; color: var(--fg); font: 600 15px/1.3 var(--ui); letter-spacing: .05em; text-transform: uppercase; margin-bottom: 2px; }
+
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 22px; display: grid; gap: 16px; min-width: 0; }
+section.primary { border-color: #4a2a1c; box-shadow: 0 0 0 1px #1d0f09 inset, 0 18px 50px -30px #ff6a2a55; }
+.sec-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.step { font: 700 13px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--ember); border: 1px solid var(--ember-deep); padding: 5px 8px; border-radius: 3px; }
+h2 { font: 700 21px/1.2 var(--display); letter-spacing: .05em; margin: 0; }
+.note { color: var(--muted); margin: 0; font-size: 15px; max-width: 65ch; }
+label, .label { font: 600 14px/1.2 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.field { display: grid; gap: 6px; min-width: 0; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+input[type=text], input[type=password], input[type=number], textarea {
+  width: 100%; background: var(--sunk); color: var(--fg); border: 1px solid var(--line); border-radius: 4px;
+  padding: 10px 12px; font: 15px/1.4 var(--body);
+}
+textarea, .mono, input.mono { font-family: var(--mono); font-size: 13.5px; }
+textarea { resize: vertical; min-height: 84px; }
+input:focus-visible, textarea:focus-visible, button:focus-visible, .choice input:focus-visible + span { outline: 2px solid var(--ember); outline-offset: 2px; }
+button {
+  font: 700 15px/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; cursor: pointer;
+  background: #1c1512; color: var(--fg); border: 1px solid #4a3a32; border-radius: 4px; padding: 11px 16px;
+}
+button:hover { border-color: var(--ember); color: #fff; }
+button.go { background: linear-gradient(#3b170a, #250d05); border-color: var(--ember); color: var(--ember-soft); box-shadow: 0 0 18px -6px var(--ember); }
+button.go:hover { color: #fff; }
+button.quiet { background: transparent; border-color: var(--line); color: var(--muted); padding: 8px 12px; font-size: 13px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.out { display: grid; gap: 6px; min-width: 0; }
+.keybox {
+  background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 12px; min-width: 0;
+  font: 13.5px/1.6 var(--mono); word-break: break-all; overflow-wrap: anywhere; user-select: all;
+}
+.keybox.secret { border-color: var(--ember-deep); }
+.keybox.masked { color: transparent; text-shadow: 0 0 9px #c9b8a8aa; user-select: none; }
+.warn { border-left: 3px solid var(--ember); background: #1e110c; padding: 12px 14px; border-radius: 0 4px 4px 0; font-size: 15px; display: grid; gap: 6px; }
+.warn b { font: 700 14px/1.2 var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ember-soft); }
+.msg { font: 600 15px/1.35 var(--ui); letter-spacing: .03em; margin: 0; }
+.msg.good { color: var(--good); }
+.msg.bad { color: var(--bad); }
+.choices { display: flex; gap: 8px; flex-wrap: wrap; border: 0; padding: 0; margin: 0; }
+.choice { position: relative; }
+.choice input { position: absolute; opacity: 0; }
+.choice span { display: inline-block; padding: 9px 14px; border: 1px solid var(--line); border-radius: 4px; font: 600 15px/1 var(--ui); letter-spacing: .06em; cursor: pointer; color: var(--muted); }
+.choice input:checked + span { border-color: var(--ember); color: var(--fg); background: #22120b; }
+.loaded { font: 500 15px/1.3 var(--ui); letter-spacing: .03em; color: var(--muted); }
+.loaded.yes { color: var(--good); }
+dl.facts-list { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 15px; }
+dl.facts-list dt { font: 600 14px/1.5 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+dl.facts-list dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.example-tag { font: 600 12px/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); border: 1px dashed var(--line); padding: 4px 6px; border-radius: 3px; }
+details summary { cursor: pointer; font: 600 15px/1.3 var(--ui); letter-spacing: .06em; color: var(--muted); }
+footer { color: var(--muted); font-size: 13px; text-align: center; }
+@media (prefers-reduced-motion: no-preference) { button { transition: border-color .15s, color .15s; } }
+@media (max-width: 480px) { section { padding: 16px; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">ApexAmp · Apex Drop</div>
+    <h1>Apex Key Studio</h1>
+    <p class="lede">Skapa din egen nyckel en gång, och sedan en licens till varje köpare. Allt räknas ut här i din webbläsare. Ingenting skickas någonstans, och den hemliga nyckeln sparas inte på sidan.</p>
+    <p id="support" class="support">Kontrollerar webbläsaren…</p>
+    <div class="facts">
+      <div class="fact"><b>Hemlig nyckel</b>Bara du har den. Den skapar licenser. Den lämnar aldrig din dator.</div>
+      <div class="fact"><b>Publik nyckel</b>Byggs in i pluginen. Den kan bara kontrollera licenser, inte skapa dem.</div>
+      <div class="fact"><b>Licens</b>En rad text, APEX-…, som köparen klistrar in. Fungerar offline.</div>
+    </div>
+  </header>
+
+  <section class="primary" id="create">
+    <div class="sec-head"><span class="step">Steg 1 · en gång</span><h2>Skapa ditt nyckelpar</h2></div>
+    <p class="note">Gör det här en enda gång. Alla versioner du säljer byggs med den publika nyckeln, så samma hemliga nyckel gäller för alltid.</p>
+    <div class="row"><button class="go" id="generate">Skapa nyckelpar</button></div>
+
+    <div id="created" hidden>
+      <div style="display:grid; gap:16px">
+        <div class="out">
+          <span class="label">Publik nyckel · inte hemlig</span>
+          <div class="keybox mono" id="pubOut"></div>
+          <div class="row"><button class="quiet" data-copy="pubOut">Kopiera</button></div>
+          <p class="note">Skicka den här till Claude i chatten. Den byggs in i pluginen.</p>
+        </div>
+
+        <div class="out">
+          <span class="label">Hemlig nyckel</span>
+          <div class="keybox mono secret masked" id="secOut"></div>
+          <div class="row">
+            <button class="quiet" id="toggleSecret">Visa</button>
+            <button class="quiet" data-copy="secOut">Kopiera</button>
+          </div>
+        </div>
+
+        <div class="warn">
+          <b>Spara den hemliga nyckeln nu</b>
+          <span>Lägg den i din lösenordshanterare, och en kopia offline: på ett USB-minne eller utskriven på papper. Skicka den aldrig i chatt, mejl eller till GitHub, inte ens till Claude. Tappar du bort den kan du inte skapa licenser för de versioner som har den här publika nyckeln. Om någon annan får den kan de skapa licenser.</span>
+        </div>
+
+        <div class="field">
+          <label for="confirmSecret">Kontrollera att du sparade den: klistra in den från där du sparade den</label>
+          <input type="password" class="mono" id="confirmSecret" autocomplete="off" spellcheck="false" placeholder="128 tecken, 0–9 och a–f">
+          <p class="msg" id="confirmMsg" role="status"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="primary" id="issue">
+    <div class="sec-head"><span class="step">Steg 2 · per köp</span><h2>Skapa en licens</h2></div>
+
+    <div class="field">
+      <label for="secretIn">Din hemliga nyckel</label>
+      <input type="password" class="mono" id="secretIn" autocomplete="off" spellcheck="false" placeholder="Klistra in från din lösenordshanterare">
+      <div class="row">
+        <button class="quiet" id="loadSecret">Använd nyckeln</button>
+        <button class="quiet" type="button" id="pickFile">Läs från fil</button>
+        <input type="file" id="secretFile" accept=".key,.txt,text/plain" hidden>
+        <button class="quiet" id="forget">Glöm nyckeln</button>
+      </div>
+      <p class="loaded" id="loadedState" role="status">Ingen nyckel laddad.</p>
+    </div>
+
+    <div class="field">
+      <label for="owner">Köparens namn eller e-post</label>
+      <input type="text" id="owner" maxlength="80" autocomplete="off" placeholder="Visas i pluginen: LICENSED TO …">
+    </div>
+
+    <fieldset class="choices" aria-label="Produkt">
+      <label class="choice"><input type="radio" name="product" value="1" checked><span>ApexAmp</span></label>
+      <label class="choice"><input type="radio" name="product" value="2"><span>Apex Drop</span></label>
+      <label class="choice"><input type="radio" name="product" value="255"><span>Båda</span></label>
+    </fieldset>
+
+    <div class="row"><button class="go" id="issueBtn" disabled>Skapa licens</button></div>
+    <p class="msg" id="issueMsg" role="status"></p>
+
+    <div id="issued" hidden>
+      <div style="display:grid; gap:14px">
+        <div class="out">
+          <span class="label">Licensnyckel</span>
+          <div class="keybox mono" id="licOut"></div>
+          <div class="row"><button class="quiet" data-copy="licOut">Kopiera nyckeln</button></div>
+        </div>
+        <div class="out">
+          <span class="label">Mejl till köparen (engelska)</span>
+          <div class="keybox" id="mailOut" style="font-family:var(--body); font-size:15px; white-space:pre-wrap; word-break:normal"></div>
+          <div class="row"><button class="quiet" data-copy="mailOut">Kopiera mejlet</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="batch">
+    <div class="sec-head"><h2>Lista för en webbutik</h2></div>
+    <p class="note">Vissa butiker delar ut en nyckel per köp från en lista du laddar upp. De här licenserna har inget namn, bara ett serienummer. Använder du hellre steg 2 per köp behöver du inte den här.</p>
+    <div class="row">
+      <div class="field" style="width:130px">
+        <label for="count">Antal</label>
+        <input type="number" id="count" min="1" max="1000" value="50">
+      </div>
+      <fieldset class="choices" aria-label="Produkt för listan" style="align-self:end">
+        <label class="choice"><input type="radio" name="batchProduct" value="1" checked><span>ApexAmp</span></label>
+        <label class="choice"><input type="radio" name="batchProduct" value="2"><span>Apex Drop</span></label>
+        <label class="choice"><input type="radio" name="batchProduct" value="255"><span>Båda</span></label>
+      </fieldset>
+    </div>
+    <div class="row"><button id="batchBtn" disabled>Skapa listan</button></div>
+    <p class="msg" id="batchMsg" role="status"></p>
+    <div id="batchOutWrap" hidden class="out">
+      <textarea id="batchOut" rows="8" readonly spellcheck="false"></textarea>
+      <div class="row"><button class="quiet" data-copy="batchOut">Kopiera alla</button></div>
+    </div>
+  </section>
+
+  <section id="check">
+    <div class="sec-head"><h2>Kontrollera en licens</h2><span class="example-tag" id="exampleTag">Exempel med utvecklingsnyckeln</span></div>
+    <p class="note">För supportärenden: klistra in en kunds licens för att se om den är äkta och vem den gäller.</p>
+    <div class="field">
+      <label for="checkKey">Licensnyckel</label>
+      <textarea id="checkKey" spellcheck="false"></textarea>
+    </div>
+    <div class="field">
+      <label for="checkPub">Publik nyckel</label>
+      <input type="text" class="mono" id="checkPub" spellcheck="false">
+    </div>
+    <div class="row"><button id="checkBtn">Kontrollera</button></div>
+    <p class="msg" id="checkMsg" role="status"></p>
+    <dl class="facts-list" id="checkFacts" hidden></dl>
+  </section>
+
+  <footer>Ed25519-signaturer i samma format som pluginen och <span class="mono">apex_keygen</span>. Sidan använder inga tjänster utanför din webbläsare.</footer>
+</div>
+
+<script>
+/* core:start */
+const ApexLicence = (() => {
+  const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  const EPOCH = 1767225600;                     // 2026-01-01T00:00:00Z
+  const enc = new TextEncoder();
+  const DOMAIN = enc.encode("APEX-LICENCE-1");
+  const PKCS8_ED25519 = "302e020100300506032b657004220420";
+  const ALG = { name: "Ed25519" };
+
+  function hexToBytes(hex) {
+    const h = String(hex).replace(/\s+/g, "");
+    if (!/^[0-9a-fA-F]*$/.test(h) || h.length % 2) throw new Error("not hex");
+    const out = new Uint8Array(h.length / 2);
+    for (let i = 0; i < out.length; ++i) out[i] = parseInt(h.substr(2 * i, 2), 16);
+    return out;
+  }
+  const bytesToHex = (b) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  function concat(...parts) {
+    const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let at = 0;
+    for (const p of parts) { out.set(p, at); at += p.length; }
+    return out;
+  }
+
+  function toBase32(bytes) {
+    let out = "", buffer = 0, bits = 0;
+    for (const b of bytes) {
+      buffer = (buffer << 8) | b; bits += 8;
+      while (bits >= 5) { out += ALPHABET[(buffer >> (bits - 5)) & 31]; bits -= 5; }
+      buffer &= (1 << bits) - 1;
+    }
+    if (bits > 0) out += ALPHABET[(buffer << (5 - bits)) & 31];
+    return out;
+  }
+  function fromBase32(text) {
+    let clean = String(text).replace(/[-\s]/g, "").toUpperCase();
+    if (clean.startsWith("APEX")) clean = clean.slice(4);
+    clean = clean.replace(/O/g, "0").replace(/[IL]/g, "1");
+    const out = [];
+    let buffer = 0, bits = 0;
+    for (const c of clean) {
+      const v = ALPHABET.indexOf(c);
+      if (v < 0) return null;
+      buffer = (buffer << 5) | v; bits += 5;
+      if (bits >= 8) { out.push((buffer >> (bits - 8)) & 255); bits -= 8; buffer &= (1 << bits) - 1; }
+    }
+    return new Uint8Array(out);
+  }
+
+  // the owner is cut to 60 bytes of UTF-8, at a character boundary
+  function ownerBytes(owner) {
+    const full = enc.encode(owner || "");
+    if (full.length <= 60) return full;
+    let kept = "";
+    for (const ch of owner) { if (enc.encode(kept + ch).length > 60) break; kept += ch; }
+    return enc.encode(kept);
+  }
+
+  function payload({ products, issueDay, serial, owner }) {
+    const o = ownerBytes(owner);
+    const p = new Uint8Array(9 + o.length);
+    p[0] = 1; p[1] = products & 255;
+    p[2] = issueDay & 255; p[3] = (issueDay >> 8) & 255;
+    for (let i = 0; i < 4; ++i) p[4 + i] = (serial >>> (8 * i)) & 255;
+    p[8] = o.length; p.set(o, 9);
+    return p;
+  }
+
+  const dayNumber = (ms = Date.now()) => Math.max(0, Math.min(65535, Math.floor((Math.floor(ms / 1000) - EPOCH) / 86400)));
+  const dayToDate = (day) => new Date((EPOCH + day * 86400) * 1000).toISOString().slice(0, 10);
+  const randomSerial = () => crypto.getRandomValues(new Uint32Array(1))[0];
+
+  async function supported() {
+    try { await crypto.subtle.generateKey(ALG, false, ["sign", "verify"]); return true; } catch { return false; }
+  }
+
+  async function generateKeyPair() {
+    const kp = await crypto.subtle.generateKey(ALG, true, ["sign", "verify"]);
+    const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", kp.privateKey));
+    const seed = pkcs8.slice(pkcs8.length - 32);
+    const pub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
+    return { secretHex: bytesToHex(concat(seed, pub)), publicHex: bytesToHex(pub) };
+  }
+
+  const importPublic = (pub) => crypto.subtle.importKey("raw", pub, ALG, false, ["verify"]);
+
+  // the secret is seed + public key (64 bytes, as apex_keygen writes it)
+  async function importSecret(secretHex) {
+    const found = String(secretHex).match(/[0-9a-fA-F]{128}/);
+    if (!found) throw new Error("A secret key is 128 characters, 0-9 and a-f.");
+    const b = hexToBytes(found[0]);
+    const seed = b.slice(0, 32), pub = b.slice(32);
+    const key = await crypto.subtle.importKey("pkcs8", concat(hexToBytes(PKCS8_ED25519), seed), ALG, false, ["sign"]);
+    const probe = enc.encode("apex key probe");
+    const sig = await crypto.subtle.sign(ALG, key, probe);
+    if (!(await crypto.subtle.verify(ALG, await importPublic(pub), sig, probe)))
+      throw new Error("The two halves of this secret key do not belong together.");
+    return { key, pub, publicHex: bytesToHex(pub) };
+  }
+
+  async function sign(secret, licence) {
+    const p = payload(licence);
+    const sig = new Uint8Array(await crypto.subtle.sign(ALG, secret.key, concat(DOMAIN, p)));
+    const body = toBase32(concat(p, sig));
+    let text = "APEX";
+    for (let i = 0; i < body.length; i += 5) text += "-" + body.slice(i, i + 5);
+    return text;
+  }
+
+  async function verify(text, publicHex) {
+    const b = fromBase32(text);
+    if (!b || b.length < 9 + 64) return null;
+    const ownerSize = b[8], payloadSize = 9 + ownerSize;
+    if (b[0] !== 1 || ownerSize > 60 || b.length !== payloadSize + 64) return null;
+    const p = b.slice(0, payloadSize), sig = b.slice(payloadSize);
+    let pubKey;
+    try { pubKey = await importPublic(hexToBytes(publicHex)); } catch { return null; }
+    if (!(await crypto.subtle.verify(ALG, pubKey, sig, concat(DOMAIN, p)))) return null;
+    return {
+      products: p[1],
+      issueDay: p[2] | (p[3] << 8),
+      serial: (p[4] | (p[5] << 8) | (p[6] << 16) | (p[7] << 24)) >>> 0,
+      owner: new TextDecoder().decode(p.slice(9)),
+    };
+  }
+
+  return { generateKeyPair, importSecret, sign, verify, supported, dayNumber, dayToDate, randomSerial };
+})();
+/* core:end */
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const PRODUCT_NAMES = { 1: "ApexAmp", 2: "Apex Drop", 255: "ApexAmp och Apex Drop" };
+  const DEV_PUBLIC = "5755a626740752f71f4ede36c6a46324bca52935f5c5a0de1b9cab94d51ac8e8";
+  const EXAMPLE_KEY = "APEX-040HG-09A00-0002T-3E9QQ-6WS08-DM6AR-VBKEM-4AJHW-W8YFX-1ZC4A-ESJXC-P4NX0-P8JPW-FCQCJ-JH7V2-5BMZ8-NN4MH-P9QFA-ZA74J-WWMXZ-54ACJ-RM8X7-FZ8CH-63QSB-3HWX0-8HKBP-3CM10";
+  let secret = null, createdSecretHex = null;
+
+  function say(el, text, kind) { el.textContent = text; el.className = "msg" + (kind ? " " + kind : ""); }
+
+  // copy buttons: the clipboard if allowed, otherwise select the text for Ctrl+C
+  document.querySelectorAll("[data-copy]").forEach((btn) => btn.addEventListener("click", () => {
+    const target = $(btn.dataset.copy);
+    const text = target.value !== undefined ? target.value : target.textContent;
+    const done = () => { const old = btn.textContent; btn.textContent = "Kopierat"; setTimeout(() => (btn.textContent = old), 1400); };
+    const select = () => {
+      if (target.select) { target.select(); return; }
+      const range = document.createRange(); range.selectNodeContents(target);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      btn.textContent = "Tryck Ctrl+C / ⌘C";
+    };
+    try { navigator.clipboard.writeText(text).then(done, select); } catch { select(); }
+  }));
+
+  async function useSecret(hex) {
+    try {
+      secret = await ApexLicence.importSecret(hex);
+      $("loadedState").textContent = "Nyckel laddad. Publik nyckel " + secret.publicHex.slice(0, 8) + "…" + secret.publicHex.slice(-8) + ".";
+      $("loadedState").className = "loaded yes";
+      $("issueBtn").disabled = false; $("batchBtn").disabled = false;
+      $("checkPub").value = secret.publicHex;
+      $("exampleTag").hidden = true;
+      $("secretIn").value = "";
+    } catch (e) {
+      secret = null;
+      $("loadedState").textContent = e.message === "not hex" ? "Det där är ingen hemlig nyckel." : e.message;
+      $("loadedState").className = "loaded";
+      $("issueBtn").disabled = true; $("batchBtn").disabled = true;
+    }
+  }
+
+  // ---- step 1
+  $("generate").addEventListener("click", async () => {
+    const kp = await ApexLicence.generateKeyPair();
+    createdSecretHex = kp.secretHex;
+    $("pubOut").textContent = kp.publicHex;
+    $("secOut").textContent = kp.secretHex;
+    $("secOut").classList.add("masked"); $("toggleSecret").textContent = "Visa";
+    $("created").hidden = false;
+    $("confirmSecret").value = ""; say($("confirmMsg"), "");
+    $("generate").textContent = "Skapa ett nytt nyckelpar";
+    await useSecret(kp.secretHex);
+  });
+  $("toggleSecret").addEventListener("click", () => {
+    const masked = $("secOut").classList.toggle("masked");
+    $("toggleSecret").textContent = masked ? "Visa" : "Dölj";
+  });
+  $("confirmSecret").addEventListener("input", () => {
+    const pasted = ($("confirmSecret").value.match(/[0-9a-fA-F]{128}/) || [""])[0].toLowerCase();
+    if (!$("confirmSecret").value.trim()) return say($("confirmMsg"), "");
+    if (pasted === createdSecretHex) say($("confirmMsg"), "Stämmer. Steg 1 är klart. Skicka den publika nyckeln till Claude.", "good");
+    else say($("confirmMsg"), "Stämmer inte med nyckeln ovan. Kopiera den igen och spara om den.", "bad");
+  });
+
+  // ---- step 2
+  $("loadSecret").addEventListener("click", () => useSecret($("secretIn").value));
+  $("secretIn").addEventListener("paste", () => setTimeout(() => { if (/[0-9a-fA-F]{128}/.test($("secretIn").value)) useSecret($("secretIn").value); }, 0));
+  $("pickFile").addEventListener("click", () => $("secretFile").click());
+  $("secretFile").addEventListener("change", async () => {
+    const f = $("secretFile").files[0];
+    if (f) await useSecret(await f.text());
+    $("secretFile").value = "";
+  });
+  $("forget").addEventListener("click", () => {
+    secret = null;
+    $("loadedState").textContent = "Ingen nyckel laddad."; $("loadedState").className = "loaded";
+    $("issueBtn").disabled = true; $("batchBtn").disabled = true;
+    $("issued").hidden = true; $("batchOutWrap").hidden = true; $("batchOut").value = "";
+  });
+
+  const chosen = (name) => Number(document.querySelector(`input[name=${name}]:checked`).value);
+
+  $("issueBtn").addEventListener("click", async () => {
+    const owner = $("owner").value.trim();
+    if (!owner) return say($("issueMsg"), "Skriv köparens namn eller e-post först.", "bad");
+    const products = chosen("product");
+    const key = await ApexLicence.sign(secret, { products, issueDay: ApexLicence.dayNumber(), serial: ApexLicence.randomSerial(), owner });
+    $("licOut").textContent = key;
+    const product = { 1: "ApexAmp", 2: "Apex Drop", 255: "ApexAmp and Apex Drop" }[products];
+    $("mailOut").textContent =
+      `Thank you for buying ${product}!\n\nYour licence key:\n\n${key}\n\n` +
+      `To unlock: open the plugin, click the TRIAL badge at the top (or Setup > Unlock), and paste the key. ` +
+      `It works offline and unlocks every DAW on this computer.\n\nKeep this email: you can use the same key again if you reinstall.`;
+    $("issued").hidden = false;
+    say($("issueMsg"), `Licens för ${PRODUCT_NAMES[products]} till ${owner}.`, "good");
+  });
+
+  // ---- store list
+  $("batchBtn").addEventListener("click", async () => {
+    const n = Math.max(1, Math.min(1000, Math.floor(Number($("count").value) || 0)));
+    const products = chosen("batchProduct"), day = ApexLicence.dayNumber();
+    let serial = ApexLicence.randomSerial();
+    const keys = [];
+    for (let i = 0; i < n; ++i, serial = (serial + 1) >>> 0)
+      keys.push(await ApexLicence.sign(secret, { products, issueDay: day, serial, owner: "" }));
+    $("batchOut").value = keys.join("\n");
+    $("batchOutWrap").hidden = false;
+    say($("batchMsg"), `${n} licenser för ${PRODUCT_NAMES[products]}. En per rad.`, "good");
+  });
+
+  // ---- check
+  async function check() {
+    const facts = $("checkFacts");
+    const l = await ApexLicence.verify($("checkKey").value, $("checkPub").value.trim());
+    if (!l) { facts.hidden = true; return say($("checkMsg"), "Ogiltig: nyckeln är inte signerad med den här publika nyckeln, eller så är den ändrad eller ofullständig.", "bad"); }
+    say($("checkMsg"), "Giltig licens.", "good");
+    facts.innerHTML = "";
+    for (const [k, v] of [["Ägare", l.owner || "(ingen, från en butikslista)"], ["Produkt", PRODUCT_NAMES[l.products] || "kod " + l.products],
+                          ["Serienummer", String(l.serial)], ["Utfärdad", ApexLicence.dayToDate(l.issueDay)]]) {
+      const dt = document.createElement("dt"); dt.textContent = k;
+      const dd = document.createElement("dd"); dd.textContent = v;
+      facts.append(dt, dd);
+    }
+    facts.hidden = false;
+  }
+  $("checkBtn").addEventListener("click", check);
+
+  // ---- start: browser support, and a worked example in the checker
+  $("checkKey").value = EXAMPLE_KEY;
+  $("checkPub").value = DEV_PUBLIC;
+  ApexLicence.supported().then((ok) => {
+    $("support").textContent = ok ? "Din webbläsare kan skapa och kontrollera nycklar (Ed25519)."
+                                  : "Den här webbläsaren saknar Ed25519. Använd senaste Chrome, Edge, Firefox eller Safari.";
+    $("support").className = "support " + (ok ? "ok" : "no");
+    $("generate").disabled = !ok;
+    if (ok) check();
+  });
+})();
+</script>
