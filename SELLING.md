@@ -5,33 +5,101 @@ as a commercial product. It is informational, not legal advice.
 
 ## Licensing
 
-- **JUCE**: ApexAmp is built on JUCE. A commercial product requires a paid JUCE
-  licence (Indie or Pro) unless it qualifies for the free/GPL tier. The GPL
-  option is not compatible with a closed-source paid plugin, so a commercial
-  JUCE licence is needed before selling. See https://juce.com/get-juce.
+- **JUCE 8**: the free Starter licence covers closed-source commercial products
+  while revenue over the last 12 months stays at or below $20,000 (no splash
+  screen required); above that, Indie ($800 perpetual, up to $300,000) or Pro.
+  Confirm against the current JUCE EULA before release.
+- **VST3 SDK**: MIT licensed since VST 3.8 (October 2025); keep the notice.
 - **NeuralAmpModelerCore**: MIT licensed — free to use commercially. Keep the
   MIT licence text in the distribution / about box attribution.
 - **Bundled NAM rigs (Bite / Body / Edge)**: these are the owner's own trained
   captures and are cleared for commercial distribution.
-- **Bundled cabinet IRs (Ashen / Meshuggah / PDI-09)**: confirm distribution
-  rights for each IR before shipping. Replace any that are not cleared.
+- **Bundled cabinet IRs (shown as Cinder / Iron / Obsidian; files
+  ir_ashen / ir_meshuggah / ir_pdi09)**: confirm distribution rights for each IR
+  before shipping and replace any that are not cleared. Product-facing names
+  avoid band, album and competitor names.
+- **Names**: no third-party trademarks in product, feature or preset names
+  (bands, albums, competitors' feature names). The company string in the
+  plugin metadata ("PolychromeNext") is too close to PolyChrome DSP and must be
+  replaced with the final company name before release.
 - **ASIO SDK** (Windows): the Steinberg ASIO SDK is compiled against but not
   redistributed; the resulting binary may be distributed. Review Steinberg's
   licensing terms.
 
-## Code signing & notarization
+## Licence keys and the trial (built in)
 
-- **Windows**: sign the VST3 and Standalone with an EV/OV code-signing
-  certificate (signtool). Unsigned plugins trigger SmartScreen warnings.
-- **macOS**: sign with a Developer ID Application certificate, then notarize
-  the .vst3/.component/.app with `notarytool` and staple the ticket. Required
-  for Gatekeeper on modern macOS. Build universal (x86_64 + arm64).
+ApexAmp has a 14-day trial with everything working. After it, without a key,
+the plugin passes the guitar through untouched; sessions keep their settings.
+Keys are Ed25519-signed and checked offline (no server, no activation limit to
+run). One key unlocks every DAW on the computer.
 
-## Installers
+The easiest way is **Apex Key Studio** (`tools/keystudio/apex-key-studio.html`,
+a page that runs in your browser and sends nothing anywhere). The command-line
+tool `apex_keygen` makes the same keys (a CI test checks they are identical).
 
-- **Windows**: an installer (e.g. Inno Setup) that places the VST3 in
-  `C:\Program Files\Common Files\VST3` and the Standalone in Program Files.
-- **macOS**: a signed/notarized `.pkg` installing to `/Library/Audio/Plug-Ins/`.
+1. **Make your own key pair once**, on your own computer: Key Studio's
+   "Create key pair", or `apex_keygen keypair ~/apex-secret.key`. Keep the
+   secret key in your password manager plus an offline copy. Lose it and you
+   cannot make keys for builds that carry its public key; leak it and anyone
+   can. Never put it in a chat, an email or GitHub.
+2. **Build releases with the public key**: commit it as the default of
+   `APEX_LICENCE_PUBLIC_KEY` in `libs/apex-licence/CMakeLists.txt`, or set it as
+   the repository variable `APEX_LICENCE_PUBLIC_KEY` for CI. Builds without it
+   use the development key, whose secret is in the repo, and say
+   "DEVELOPMENT BUILD · NOT FOR SALE" on the unlock screen. Never sell one.
+3. **Buy button**: `-DAPEX_STORE_URL=https://...` (your store page).
+4. **Keys per sale**: Key Studio's "Create a licence" (it also writes the email
+   to the buyer), or `apex_keygen issue ~/apex-secret.key --owner "Buyer Name"`.
+   For a store that hands out one key per sale from a list: Key Studio's store
+   list, or `apex_keygen batch ~/apex-secret.key 500 > keys.txt`.
+5. Key Studio's "Check a licence", or `apex_keygen check <key>`, verifies a
+   key (support requests).
+
+The trial is a file in the Apex folder; deleting it restarts the trial. That is
+accepted: a trial only has to keep honest people honest.
+
+## Installers (built by CI)
+
+Every CI run uploads an `Installers-<platform>` artifact:
+
+- **Windows**: `ApexAmp-<version>-Windows-Setup.exe` and `ApexDrop-...` (Inno
+  Setup, `packaging/windows/apex.iss`). The VST3 goes to
+  `C:\Program Files\Common Files\VST3`, the standalone app to
+  `Program Files\Apex\<product>`; EULA page, uninstaller, 64-bit only.
+- **macOS**: `ApexAmp-<version>-macOS.pkg` (`packaging/macos/build_pkg.sh`) with
+  the VST3, the Audio Unit and the app as separate choices. Universal binaries
+  (Apple silicon and Intel), macOS 10.15 and later. CI also runs Apple's
+  `auval` on both Audio Units.
+- **Linux**: `.tar.gz` with an `install.sh` for the current user.
+
+The version comes from the `VERSION` file. The EULA (`packaging/EULA.txt`) and
+third-party notices (`packaging/THIRD_PARTY.txt`) ship with every installer;
+have the EULA reviewed for your country before selling.
+
+## Release settings and signing
+
+Set these in GitHub under Settings → Secrets and variables → Actions. Without
+them CI still builds everything, unsigned and with the development key.
+
+Variables:
+- `APEX_LICENCE_PUBLIC_KEY`: your public key (see above). Required for sale.
+- `APEX_STORE_URL`: the store page for the Buy button.
+- `APEX_PUBLISHER`: the company name shown by the Windows installer.
+
+Secrets, macOS (Apple Developer Program, $99/year):
+- `MACOS_CERT_P12`: base64 of a .p12 holding both your "Developer ID
+  Application" and "Developer ID Installer" certificates;
+  `MACOS_CERT_PASSWORD`: its password.
+- `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` (an app-specific password)
+  for notarisation. With these set, CI signs the plug-ins and the app, signs
+  the .pkg, notarises it and staples the ticket. Unsigned packages are blocked
+  by Gatekeeper on customers' Macs.
+
+Secrets, Windows (an OV or EV code-signing certificate):
+- `WINDOWS_CERT_PFX`: base64 of the .pfx; `WINDOWS_CERT_PASSWORD`. CI signs
+  the plug-ins, the app and the installer. Unsigned installers trigger
+  SmartScreen warnings. (EV certificates on hardware tokens need a cloud
+  signing service instead; adapt the signing step to it.)
 
 ## Pre-release QA
 
@@ -46,12 +114,18 @@ as a commercial product. It is informational, not legal advice.
 
 - App icon / branding for the Standalone and installer.
 - About box with version + attributions (in app — see the editor's About).
-- EULA, privacy note, and a simple license/activation strategy if desired.
+- EULA: drafted in `packaging/EULA.txt` (have it reviewed). Privacy note: the
+  plugins collect nothing and never go online.
 - Versioned changelog.
 
 ## Current status
 
-- Cross-platform CI builds (Win/Mac/Linux) with audio + resampler guards: DONE.
-- NAM engine at native 48 kHz with host resampling: DONE.
-- Custom UI, presets, tone controls: DONE / ongoing.
-- Signing, notarization, installers, pluginval pass: TODO before sale.
+- Cross-platform CI builds (Win/Mac/Linux) with audio, resampler, licence,
+  gate and bypass tests: DONE.
+- pluginval strictness 10 (both VST3s, Linux) and auval (both AUs, CI): DONE.
+- Licence keys and 14-day trial: DONE (needs your own key pair).
+- Installers for Windows, macOS and Linux: DONE (unsigned until the signing
+  secrets are set).
+- Before the first sale: your key pair, company name (replace
+  "PolychromeNext"), IR rights, signing certificates, EULA review, testing in
+  the DAWs above.

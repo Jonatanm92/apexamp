@@ -1,4 +1,4 @@
-name: Build ApexAmp
+name: Build Apex suite
 
 on:
   push:
@@ -14,16 +14,26 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    env:
+      HAS_MAC_SIGNING: ${{ secrets.MACOS_CERT_P12 != '' }}
+      HAS_WIN_SIGNING: ${{ secrets.WINDOWS_CERT_PFX != '' }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # jobs = the runner's cores: an unbounded make -j runs out of memory
+          # on the many JUCE translation units and the runner is shut down
           - os: ubuntu-latest
             name: Linux
+            jobs: 4
           - os: macos-latest
             name: macOS
+            jobs: 3
+            # one binary for Apple silicon and Intel Macs, macOS 10.15 and later
+            cmake_extra: '"-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15'
           - os: windows-latest
             name: Windows
+            jobs: 4
 
     steps:
       - name: Checkout
@@ -60,28 +70,146 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
           -DAPEXAMP_ENABLE_ASIO=ON
           "-DASIO_SDK_DIR=${{ github.workspace }}/asiosdk/asiosdk_2.3.3_2019-06-14"
+          "-DAPEX_LICENCE_PUBLIC_KEY=${{ vars.APEX_LICENCE_PUBLIC_KEY }}"
+          "-DAPEX_STORE_URL=${{ vars.APEX_STORE_URL }}"
 
       - name: Configure CMake
         if: runner.os != 'Windows'
-        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} ${{ matrix.cmake_extra }}
+          "-DAPEX_LICENCE_PUBLIC_KEY=${{ vars.APEX_LICENCE_PUBLIC_KEY }}"
+          "-DAPEX_STORE_URL=${{ vars.APEX_STORE_URL }}"
 
       - name: Build
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel ${{ matrix.jobs }}
 
-      # Regression guard: load the 3 NAM rigs and confirm they produce audio.
-      # Fails the build if the linker ever strips the architecture registrations
-      # again (which would ship a silent plugin).
-      - name: Verify NAM rigs produce audio
+      # Regression guards:
+      #  - rig_audio / resample_streaming: the 3 NAM rigs load and make sound
+      #    (catches the linker stripping the architecture registrations, which
+      #    would ship a silent plugin).
+      #  - pitch_engine: Apex Drop's pitch engine (null, latency, pitch accuracy,
+      #    formants, stability).
+      - name: Run tests
         run: ctest --test-dir build -C ${{ env.BUILD_TYPE }} --output-on-failure
 
-      # Upload the finished plugin so you can download it from the run page
+      # Logic and GarageBand only load Audio Units that pass Apple's validator.
+      - name: Validate Audio Units (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          auval -v aufx Apx2 Pcnx
+          auval -v aufx ApDr Pcnx
+
+      # ---- Installers ---------------------------------------------------------
+      # Signing is optional: it runs only when the secrets exist (see SELLING.md).
+      - name: Set up signing (macOS)
+        if: runner.os == 'macOS' && env.HAS_MAC_SIGNING == 'true'
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/certs.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/certs.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          xcrun notarytool store-credentials apex-notary --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+                --password "$APPLE_APP_PASSWORD" --keychain "$keychain"
+          echo "APPLE_APP_IDENTITY=Developer ID Application" >> "$GITHUB_ENV"
+          echo "APPLE_INSTALLER_IDENTITY=Developer ID Installer" >> "$GITHUB_ENV"
+          echo "APPLE_NOTARY_PROFILE=apex-notary" >> "$GITHUB_ENV"
+
+      - name: Build installers (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          version="$(head -1 VERSION)"
+          art=build/plugins
+          packaging/macos/build_pkg.sh "$art/ApexAmp/ApexAmp_artefacts/Release" ApexAmp ApexAmp com.apex.apexamp "$version" installers
+          packaging/macos/build_pkg.sh "$art/ApexDrop/ApexDrop_artefacts/Release" "Apex Drop" ApexDrop com.apex.apexdrop "$version" installers
+
+      - name: Build installers (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          APEX_PUBLISHER: ${{ vars.APEX_PUBLISHER }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          $version = (Get-Content VERSION -TotalCount 1).Trim()
+          $publisher = if ($env:APEX_PUBLISHER) { $env:APEX_PUBLISHER } else { "Apex" }
+          $out = Join-Path (Get-Location) "installers"
+
+          $sign = $null
+          if ($env:HAS_WIN_SIGNING -eq 'true') {
+            $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
+            $sign = { param($file) & $signtool.FullName sign /f $pfx /p $env:WINDOWS_CERT_PASSWORD /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
+                      if ($LASTEXITCODE -ne 0) { throw "signing failed: $file" } }
+          }
+
+          $products = @(
+            @{ Name = "ApexAmp";   Slug = "ApexAmp";  Guid = "D76503EB-8131-4DD6-B825-32A8A47506B1" },
+            @{ Name = "Apex Drop"; Slug = "ApexDrop"; Guid = "9FD98DBA-6333-4C10-9EA7-733C556DC88C" })
+          foreach ($p in $products) {
+            $art = "build/plugins/$($p.Slug)/$($p.Slug)_artefacts/Release"
+            $stage = Join-Path (Get-Location) "staging/$($p.Slug)"
+            New-Item -ItemType Directory -Force -Path "$stage/VST3", "$stage/Standalone" | Out-Null
+            Copy-Item -Recurse -Force "$art/VST3/$($p.Name).vst3" "$stage/VST3/"
+            Copy-Item -Force "$art/Standalone/$($p.Name).exe" "$stage/Standalone/"
+            Copy-Item -Force packaging/EULA.txt, packaging/THIRD_PARTY.txt $stage
+            if ($sign) {
+              & $sign "$stage/Standalone/$($p.Name).exe"
+              Get-ChildItem -Recurse "$stage/VST3" -Filter *.vst3 -File | ForEach-Object { & $sign $_.FullName }
+            }
+            & $iscc "/DProduct=$($p.Name)" "/DSlug=$($p.Slug)" "/DAppGuid=$($p.Guid)" "/DVersion=$version" `
+                    "/DPublisher=$publisher" "/DSourceDir=$stage" "/DOutputDir=$out" packaging/windows/apex.iss
+            if ($LASTEXITCODE -ne 0) { throw "iscc failed for $($p.Name)" }
+            if ($sign) { & $sign (Join-Path $out "$($p.Slug)-$version-Windows-Setup.exe") }
+          }
+
+      - name: Build packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          version="$(head -1 VERSION)"
+          art=build/plugins
+          packaging/linux/package.sh "$art/ApexAmp/ApexAmp_artefacts/Release" ApexAmp ApexAmp "$version" installers
+          packaging/linux/package.sh "$art/ApexDrop/ApexDrop_artefacts/Release" "Apex Drop" ApexDrop "$version" installers
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: Installers-${{ matrix.name }}
+          if-no-files-found: error
+          path: installers/*
+
+      # Upload the finished plugins so you can download them from the run page
       # (Actions tab -> this run -> Artifacts) without compiling locally.
-      - name: Upload plugin
+      - name: Upload ApexAmp
         uses: actions/upload-artifact@v4
         with:
           name: ApexAmp-${{ matrix.name }}
           if-no-files-found: warn
           path: |
-            build/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/VST3/**
-            build/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/AU/**
-            build/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/Standalone/**
+            build/plugins/ApexAmp/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/VST3/**
+            build/plugins/ApexAmp/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/AU/**
+            build/plugins/ApexAmp/ApexAmp_artefacts/${{ env.BUILD_TYPE }}/Standalone/**
+
+      - name: Upload Apex Drop
+        uses: actions/upload-artifact@v4
+        with:
+          name: ApexDrop-${{ matrix.name }}
+          if-no-files-found: warn
+          path: |
+            build/plugins/ApexDrop/ApexDrop_artefacts/${{ env.BUILD_TYPE }}/VST3/**
+            build/plugins/ApexDrop/ApexDrop_artefacts/${{ env.BUILD_TYPE }}/AU/**
+            build/plugins/ApexDrop/ApexDrop_artefacts/${{ env.BUILD_TYPE }}/Standalone/**
