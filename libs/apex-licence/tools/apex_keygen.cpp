@@ -19,16 +19,38 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
 #include <sstream>
 #include <string>
+#include <vector>
+
+#ifdef _WIN32
+ #define WIN32_LEAN_AND_MEAN
+ #define NOMINMAX
+ #include <windows.h>
+#endif
 
 using namespace apex::licence;
 
 namespace
 {
+    // Arguments and paths are UTF-8 on every platform, so a buyer called
+    // "Ångström" gets the same key on Windows as elsewhere.
+    std::filesystem::path pathOf (const std::string& utf8)
+    {
+       #ifdef _WIN32
+        const int n = MultiByteToWideChar (CP_UTF8, 0, utf8.c_str(), (int) utf8.size(), nullptr, 0);
+        std::wstring wide ((size_t) n, L'\0');
+        MultiByteToWideChar (CP_UTF8, 0, utf8.c_str(), (int) utf8.size(), wide.data(), n);
+        return std::filesystem::path (wide);
+       #else
+        return std::filesystem::path (utf8);
+       #endif
+    }
+
     int usage()
     {
         std::cerr << "usage:\n"
@@ -41,7 +63,7 @@ namespace
 
     bool readSecret (const std::string& path, SecretKey& key)
     {
-        std::ifstream in (path);
+        std::ifstream in (pathOf (path));
         std::stringstream text;
         text << in.rdbuf();
         if (! in || ! fromHex (text.str(), key.data(), key.size()))
@@ -65,11 +87,13 @@ namespace
         return product::all;
     }
 
-    std::string option (int argc, char** argv, const char* name, const std::string& fallback = {})
+    using Args = std::vector<std::string>;
+
+    std::string option (const Args& args, const char* name, const std::string& fallback = {})
     {
-        for (int i = 1; i + 1 < argc; ++i)
-            if (std::strcmp (argv[i], name) == 0)
-                return argv[i + 1];
+        for (size_t i = 1; i + 1 < args.size(); ++i)
+            if (args[i] == name)
+                return args[i + 1];
         return fallback;
     }
 
@@ -80,16 +104,16 @@ namespace
     }
 }
 
-int main (int argc, char** argv)
+int run (const Args& args)
 {
-    if (argc < 3)
+    if (args.size() < 3)
         return usage();
-    const std::string command = argv[1];
+    const std::string command = args[1];
 
     if (command == "keypair")
     {
-        const std::string path = argv[2];
-        if (std::ifstream (path).good())
+        const std::string path = args[2];
+        if (std::ifstream (pathOf (path)).good())
         {
             std::cerr << path << " already exists; not overwriting a secret key\n";
             return 1;
@@ -97,7 +121,7 @@ int main (int argc, char** argv)
         PublicKey pub;
         SecretKey sec;
         generateKeyPair (pub, sec);
-        std::ofstream out (path);
+        std::ofstream out (pathOf (path));
         out << toHex (sec.data(), sec.size()) << "\n";
         if (! out)
         {
@@ -113,14 +137,14 @@ int main (int argc, char** argv)
     if (command == "issue")
     {
         SecretKey sec;
-        if (! readSecret (argv[2], sec))
+        if (! readSecret (args[2], sec))
             return 1;
         Licence l;
-        l.owner = option (argc, argv, "--owner");
+        l.owner = option (args, "--owner");
         if (l.owner.empty())
             return usage();
-        l.products = parseProducts (option (argc, argv, "--products", "all"));
-        const auto serial = option (argc, argv, "--serial");
+        l.products = parseProducts (option (args, "--products", "all"));
+        const auto serial = option (args, "--serial");
         l.serial = serial.empty() ? randomSerial() : (std::uint32_t) std::stoul (serial);
         l.issueDay = today();
         std::cout << sign (l, sec) << "\n";
@@ -129,15 +153,15 @@ int main (int argc, char** argv)
 
     if (command == "batch")
     {
-        if (argc < 4)
+        if (args.size() < 4)
             return usage();
         SecretKey sec;
-        if (! readSecret (argv[2], sec))
+        if (! readSecret (args[2], sec))
             return 1;
-        const int count = std::stoi (argv[3]);
+        const int count = std::stoi (args[3]);
         Licence l;
-        l.products = parseProducts (option (argc, argv, "--products", "all"));
-        const auto first = option (argc, argv, "--first-serial");
+        l.products = parseProducts (option (args, "--products", "all"));
+        const auto first = option (args, "--first-serial");
         l.serial = first.empty() ? randomSerial() : (std::uint32_t) std::stoul (first);
         l.issueDay = today();
         for (int i = 0; i < count; ++i, ++l.serial)
@@ -148,13 +172,13 @@ int main (int argc, char** argv)
     if (command == "check")
     {
         PublicKey pub = builtInPublicKey();
-        const auto hex = option (argc, argv, "--public");
+        const auto hex = option (args, "--public");
         if (! hex.empty() && ! fromHex (hex, pub.data(), pub.size()))
         {
             std::cerr << "bad public key\n";
             return 2;
         }
-        const auto l = verify (argv[2], pub);
+        const auto l = verify (args[2], pub);
         if (! l)
         {
             std::cout << "INVALID\n";
@@ -167,3 +191,25 @@ int main (int argc, char** argv)
 
     return usage();
 }
+
+#ifdef _WIN32
+// Windows hands main() its arguments in the ANSI code page; take them as UTF-16 and convert
+int wmain (int argc, wchar_t** argv)
+{
+    SetConsoleOutputCP (CP_UTF8);
+    Args args;
+    for (int i = 0; i < argc; ++i)
+    {
+        const int n = WideCharToMultiByte (CP_UTF8, 0, argv[i], -1, nullptr, 0, nullptr, nullptr);
+        std::string utf8 ((size_t) (n > 0 ? n - 1 : 0), '\0');
+        WideCharToMultiByte (CP_UTF8, 0, argv[i], -1, utf8.data(), n, nullptr, nullptr);
+        args.push_back (std::move (utf8));
+    }
+    return run (args);
+}
+#else
+int main (int argc, char** argv)
+{
+    return run (Args (argv, argv + argc));
+}
+#endif
